@@ -4,6 +4,7 @@ Implement basic GRU
 
 Start to research the related literature (eg start with citations to the clinical predictions paper)
 
+https://docs.google.com/presentation/d/1hq7a8Rca0D68WuwQCqJ7u8V7TeyWwVGhDps7A4815tQ/edit?usp=sharing
 
 # 22 February - 1 March
 
