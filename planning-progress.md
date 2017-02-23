@@ -1,5 +1,7 @@
 # 22 February - 1 March
 
+Research the related literature.
+
 State some research questions and discuss them.
 
 Pick the most relevant papers, and prepare a small presentation for them.
