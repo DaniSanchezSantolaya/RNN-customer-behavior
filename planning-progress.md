@@ -6,7 +6,7 @@ State some research questions and discuss them.
 
 Pick the most relevant papers, and prepare a small presentation for them.
 
-Implement RNN using the deltas instead the products in every moment.
+Implement RNN using the deltas instead the products in every moment, still with fixed sequence length
 
 
 # 16 February - 22 February
