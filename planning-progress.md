@@ -8,6 +8,7 @@ Pick the most relevant papers, and prepare a small presentation for them.
 
 Implement RNN using the deltas instead the products in every moment, still with fixed sequence length
 
+https://docs.google.com/presentation/d/1_hAfbtxnnAXjPR5s1gCQ8uj3oa_lGU96PeqcsGi8Dq8/edit?usp=sharing
 
 # 16 February - 22 February
 
