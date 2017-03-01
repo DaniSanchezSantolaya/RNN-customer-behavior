@@ -1,4 +1,4 @@
-# 22 February - 1 March
+# 1 February - 8 March
 
 Write a thesis proporsal based on 1 research question.
 
