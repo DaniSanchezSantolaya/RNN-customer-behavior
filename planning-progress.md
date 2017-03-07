@@ -1,6 +1,8 @@
 # 1 February - 8 March
 
-Write a thesis proporsal based on 1 research question.
+Write a thesis proporsal based on 1 (or two) research question.
+
+https://docs.google.com/presentation/d/1szgBBHIX13SJ-pEuaYCLrX_W05qMFgFa37d98fPTqwI/edit?usp=sharing
 
 
 # 22 February - 1 March
