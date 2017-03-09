@@ -15,9 +15,9 @@ random.seed(17)
 np.random.seed(17)
 
 
-#python experiment_santander_m3.py load_pickles p_val N_interactions opt learning_rate n_hidden batch_size rnn_type max_steps
+#python experiment_santander_m3.py load_pickles p_val N_interactions opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps
 #python experiment_santander_m3.py True 0.20 17 adam 0.0001 64 128 lstm 1 0.1 50000
-#C:\Projects\Thesis\src\baseline_model>python experiment_santander_m3.py True 0.20 17 adam 0.0001 64 128 lstm2 2 0 500000
+#C:\Projects\Thesis\src\baseline_model>python experiment_santander_m3.py True 0.20 17 adam 0.0001 64 128 lstm2 2 0 0 sigmoid 500000
 
 target_columns = ['ind_ahor_fin_ult1', 'ind_aval_fin_ult1', 'ind_cco_fin_ult1',
            'ind_cder_fin_ult1', 'ind_cno_fin_ult1', 'ind_ctju_fin_ult1',
@@ -43,9 +43,11 @@ batch_size = int(sys.argv[7])
 rnn_type = sys.argv[8]
 rnn_layers = int(sys.argv[9])
 dropout = float(sys.argv[10])
-max_steps = int(sys.argv[11])
+l2_reg = float(sys.argv[11])
+type_output = sys.argv[12]
+max_steps = int(sys.argv[13])
 
-name_submission = 'kaggle_submissions/m3-' + 'interactions_' + str(N_interactions) + '-' + opt + '-lrate_' + str(learning_rate) + '-hidden_' + str(n_hidden) + '-bSize_' + str(batch_size) + '-' + rnn_type + '-rnn_layers' + str(rnn_layers) + '-dropout' + str(dropout) + '-max_steps_' + str(max_steps) + '.csv'
+name_submission = 'kaggle_submissions/m3-' + 'interactions_' + str(N_interactions) + '-' + opt + '-lrate_' + str(learning_rate) + '-hidden_' + str(n_hidden) + '-bSize_' + str(batch_size) + '-' + rnn_type + '-rnn_layers' + str(rnn_layers) + '-dropout_' + str(dropout) + '-L2_' + str(l2_reg) + '-typeoutput_' + str(type_output) + '-max_steps_' + str(max_steps) + '.csv'
 
 print('Arguments: ')
 print('Load pickle: ' + str(b_load_pickles))
@@ -57,6 +59,8 @@ print('batch_size: ' + str(batch_size))
 print('rnn_type: ' + str(rnn_type))
 print('rnn_layers: ' + str(rnn_layers))
 print('dropout: ' + str(dropout))
+print('l2_reg: ' + str(l2_reg))
+print('type_output: ' + str(type_output))
 print('max_steps: ' + str(max_steps))
 
 	
@@ -342,9 +346,18 @@ def create_model():
 
     pred = RNN(x, weights, biases)
 
-    # Define loss and optimizer
-    pred_prob = tf.sigmoid(pred)
-    cost = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(pred, y))
+    # Define loss 
+    if type_output.lower() == 'sigmoid':
+        pred_prob = tf.sigmoid(pred)
+        cost = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(pred, y))
+    else:
+        pred_prob = tf.nn.softmax(pred)
+        cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(pred, y))
+    
+    #Add L2 regularizatoin loss
+    cost = cost + l2_reg * tf.nn.l2_loss(weights)
+    
+    #Define optimizer
     if opt.lower() == 'sgd':
         optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost)
     elif opt.lower() == 'adam':
@@ -400,7 +413,8 @@ def create_model():
     t_cut = tf.fill((1, num_samples), cut_at_k)
     num_added_cut_k = tf.minimum(tf.cast(t_cut, tf.float32), tf.cast(num_added, tf.float32))
     num_added_cut_k = tf.maximum(num_added_cut_k, tf.cast(tf.fill((1, num_samples), 1), tf.float32))
-    AP = tf.cast(sum_p_at_k, tf.float32)/tf.cast(num_added_cut_k, tf.float32)
+    #AP = tf.cast(sum_p_at_k, tf.float32)/tf.cast(num_added_cut_k, tf.float32)
+    AP = tf.cast(sum_p_at_k, tf.float32)/tf.cast(cut_at_k, tf.float32)
     MAP = tf.reduce_mean(AP)
     
     
