@@ -1,3 +1,12 @@
+# 8 February - 15 March
+
+Expand thesis proporsal with: data, evaluation, and baselines
+
+Decide if use the coupons data set.
+
+Complete experiment with doctor baseline and evaluation decided
+
+
 # 1 February - 8 March
 
 Write a thesis proporsal based on 1 (or two) research question.
