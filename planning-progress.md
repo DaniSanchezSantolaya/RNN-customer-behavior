@@ -6,6 +6,7 @@ Decide if use the coupons data set.
 
 Complete experiment with doctor baseline and evaluation decided
 
+https://docs.google.com/presentation/d/1glKNPGVXef2UZiUiPRxZP-bxb33s3wXyB0oLdv1iTi4/edit#slide=id.p
 
 # 1 February - 8 March
 
