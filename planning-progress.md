@@ -1,11 +1,11 @@
-# 15 February - 22 March
+# 15 March - 22 March
 
 Think what to do different so the work incorporates some novelty
 
 Experiment with PEGA data
 
 
-# 8 February - 15 March
+# 8 March - 15 March
 
 Expand thesis proporsal with: data, evaluation, and baselines
 
@@ -15,7 +15,7 @@ Complete experiment with doctor baseline and evaluation decided
 
 https://docs.google.com/presentation/d/1glKNPGVXef2UZiUiPRxZP-bxb33s3wXyB0oLdv1iTi4/edit#slide=id.p
 
-# 1 February - 8 March
+# 1 March - 8 March
 
 Write a thesis proporsal based on 1 (or two) research question.
 
