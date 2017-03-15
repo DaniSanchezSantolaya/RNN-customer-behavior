@@ -1,3 +1,10 @@
+# 15 February - 22 March
+
+Think what to do different so the work incorporates some novelty
+
+Experiment with PEGA data
+
+
 # 8 February - 15 March
 
 Expand thesis proporsal with: data, evaluation, and baselines
