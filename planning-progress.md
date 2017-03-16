@@ -4,6 +4,7 @@ Think what to do different so the work incorporates some novelty
 
 Experiment with PEGA data
 
+Prepare new test set in Santander data and evaluate with MAP and Top-k recall with this set
 
 # 8 March - 15 March
 
