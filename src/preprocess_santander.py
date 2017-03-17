@@ -95,14 +95,14 @@ def load_test_csv():
     df_test['fecha_dato'] = pd.to_datetime(df_test['fecha_dato'])
     return df_test
     
-def build_train_and_test(df, df_test, representation, max_interactions, aux_features):
+def build_train_and_test(df, df_test, representation, max_interactions, aux_features, padding):
 
     if representation == 1:
         X_train, Y_train, X_test = build_rep_1(df, df_test, max_interactions, aux_features)
     elif representation == 4:
         print('Build rep 4')
         #df = mark_interactions(df)
-        X_train, Y_train, X_test = build_rep_4(df, df_test, max_interactions, aux_features)
+        X_train, Y_train, X_test = build_rep_4(df, df_test, max_interactions, aux_features, padding)
     return X_train, Y_train, X_test
     
 def mark_interactions(df):
@@ -209,7 +209,7 @@ def build_rep_1(df, df_test, max_interactions, aux_features):
     val_date = df['fecha_dato'].unique()[-1]
     a = 0
     
-    if True:
+    if False:
         with open('pickles/X_train_temp.pickle', 'rb') as handle:
             X_train = pickle.load(handle)
         with open('pickles/Y_train_temp.pickle', 'rb') as handle:
@@ -280,10 +280,12 @@ def build_rep_1(df, df_test, max_interactions, aux_features):
     return X_train, Y_train, X_test
     
     
+    
+    
 '''
 Build representation 4: Only vectors of interactions formed by: Positive interactions(adds) + Negative interactions(drops) + time from last interaction
 '''
-def build_rep_4(df, df_test, max_interactions, aux_features): 
+def build_rep_4(df, df_test, max_interactions, aux_features, padding): 
 
     dtype_sparse = np.int8
     if len(aux_features) > 0:
@@ -318,7 +320,10 @@ def build_rep_4(df, df_test, max_interactions, aux_features):
                 if len(interactions_sample) > 0:
                     if len(interactions_sample > max_interactions):
                         interactions_sample = interactions_sample[-max_interactions:, :]
-                    x[-len(interactions_sample):, :] = interactions_sample
+                    if padding.lower() == 'right':
+                        x[:len(interactions_sample), : ] = interactions_sample #Padding Right
+                    elif padding.lower() == 'left':
+                        x[-len(interactions_sample):, :] = interactions_sample #Padding Left
                 X_train.append(sparse.csr_matrix(x, dtype=dtype_sparse))
                 Y_train.append(sparse.csr_matrix(y, dtype=dtype_sparse))
         if ncodpers in ncodpers_test:
@@ -327,7 +332,10 @@ def build_rep_4(df, df_test, max_interactions, aux_features):
             if num_interactions > 0:
                 if len(interactions) > max_interactions:
                     interactions = interactions[-max_interactions:, :]
-                x_test[-len(interactions):, :] = interactions
+                if padding.lower() == 'right':
+                    x_test[:len(interactions):, :] = interactions #Padding Right
+                elif padding.lower() == 'left':
+                    x_test[-len(interactions):, :] = interactions #Padding Left
             X_test[idx_test] = x_test
         if a % 10000 == 0:
             print(a)
@@ -335,7 +343,4 @@ def build_rep_4(df, df_test, max_interactions, aux_features):
         a = a + 1
     return X_train, Y_train, X_test
     
-
-
-
-    
+ 

@@ -3,32 +3,36 @@ import tensorflow as tf
 import numpy as np
 import os
 
+def _seq_length(sequence):
+    used = tf.sign(tf.reduce_max(tf.abs(sequence), reduction_indices=2))
+    length = tf.reduce_sum(used, reduction_indices=1)
+    length = tf.cast(length, tf.int32)
+    return length
+
+
 class RNN_static:
 
     def __init__(self, parameters):
 
         self.parameters = parameters
 
+    
 
+    #Select the Last Relevant Output
+    def _last_relevant(self, output, length):
+        batch_size = tf.shape(output)[0]
+        max_length = tf.shape(output)[1]
+        out_size = int(output.get_shape()[2])
+        index = tf.range(0, batch_size) * max_length + (length - 1)
+        flat = tf.reshape(output, [-1, out_size])
+        relevant = tf.gather(flat, index)
 
+        return relevant
+        
+        
     def RNN(self, x, weights, biases):
 
-        # Prepare data shape to match `rnn` function requirements
-        # Current data input shape: (batch_size, n_steps, n_input)
-        # Required shape: 'n_steps' tensors list of shape (batch_size, n_input)
         
-        # Permuting batch_size and n_steps
-        
-        x = tf.transpose(x, [1, 0, 2])
-        
-        
-        # Reshaping to (n_steps*batch_size, n_input)
-        x = tf.reshape(x, [-1, self.parameters['n_input']])
-        
-
-        # Split to get a list of 'n_steps' tensors of shape (batch_size, n_input)
-        #x = tf.split(x, n_steps, 0)
-        x = tf.split(split_dim=0, num_split=self.parameters['seq_length'], value=x)
 
 
         # Define a lstm cell with tensorflow
@@ -61,11 +65,43 @@ class RNN_static:
         # Get lstm cell output
         #tf.nn.rnn(cell, inputs,#initial_state=self._initial_state)
         #outputs, states = tf.contrib.rnn.static_rnn(lstm_cell, x, dtype=tf.float32)
-        outputs, states = tf.nn.rnn(rnn_cell, x, dtype=tf.float32)
 
+        if self.parameters['padding'].lower() == 'left':
+            # Prepare data shape to match `rnn` function requirements
+            # Current data input shape: (batch_size, n_steps, n_input)
+            # Required shape: 'n_steps' tensors list of shape (batch_size, n_input)
+            
+            # Permuting batch_size and n_steps            
+            x = tf.transpose(x, [1, 0, 2])          
+            
+            # Reshaping to (n_steps*batch_size, n_input)
+            x = tf.reshape(x, [-1, self.parameters['n_input']])
+            
+            # Split to get a list of 'n_steps' tensors of shape (batch_size, n_input)
+            #x = tf.split(x, n_steps, 0)
+            x = tf.split(split_dim=0, num_split=self.parameters['seq_length'], value=x)
+        
+            outputs, states = tf.nn.rnn(rnn_cell, x, dtype=tf.float32)
+        elif self.parameters['padding'].lower() == 'right':
+            #x = tf.placeholder(tf.float32, [None, max_length, frame_size])
+            outputs, states = tf.nn.dynamic_rnn(
+            rnn_cell,
+            self.x,
+            dtype=tf.float32,
+            sequence_length=_seq_length(self.x)
+            )
+
+        
+        #Obtaining the correct output state
+        if self.parameters['padding'].lower() == 'right': #If padding zeros is at right, we need to get the right output, since the last is not validation
+            last_relevant_output = self._last_relevant(outputs, _seq_length(self.x))
+        elif self.parameters['padding'].lower() == 'left':
+            last_relevant_output = outputs[-1]
+        
+ 
 
         # Linear activation, using rnn inner loop last output
-        return tf.matmul(outputs[-1], weights['out']) + biases['out']
+        return tf.matmul(last_relevant_output, weights['out']) + biases['out']
 
     def create_model(self):
         tf.reset_default_graph()
@@ -85,12 +121,27 @@ class RNN_static:
         pred = self.RNN(self.x, weights, biases)
 
         # Define loss 
+        
+            
+
         if self.parameters['type_output'].lower() == 'sigmoid':
             self.pred_prob = tf.sigmoid(pred)
             self.cost = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(pred, self.y))
         else:
             self.pred_prob = tf.nn.softmax(pred)
             self.cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(pred, self.y))
+        ''' Maybe something like this should be used for padding right
+            def cost(output, target):
+            # Compute cross entropy for each frame.
+            cross_entropy = target * tf.log(output)
+            cross_entropy = -tf.reduce_sum(cross_entropy, reduction_indices=2)
+            mask = tf.sign(tf.reduce_max(tf.abs(target), reduction_indices=2))
+            cross_entropy *= mask
+            # Average over actual sequence lengths.
+            cross_entropy = tf.reduce_sum(cross_entropy, reduction_indices=1)
+            cross_entropy /= tf.reduce_sum(mask, reduction_indices=1)
+            return tf.reduce_mean(cross_entropy)
+        '''
         
         #Add L2 regularizatoin loss
         self.cost = self.cost + self.parameters['l2_reg'] * tf.nn.l2_loss(weights['out'])
@@ -202,31 +253,38 @@ class RNN_static:
                         saver.save(sess, checkpoint_path, global_step=step)
                         #TODO save best path to load it later
                         self.best_model_path = 'model_best.ckpt-' + str(step)
+                        #print('-->save best model: ' + str(checkpoint_path) + ' - step: ' + str(step) + ' best_model_path: ' + str(self.best_model_path))
                     
                 if (step % checkpoint_freq_step == 0) or (step == self.parameters['max_steps'] - 1):
                     checkpoint_path = os.path.join(checkpoint_dir, 'model_last.ckpt')
                     saver.save(sess, checkpoint_path, global_step=step)
                     self.last_model_path = 'model_last.ckpt-' + str(step)
+                    #print('-->save checkpoint model: ' + str(checkpoint_path) + ' - step: ' + str(step) + ' last_model_path: ' + str(self.last_model_path))
                     
                 step += 1
             print("Optimization Finished!")
+            
             
             pred_val = sess.run(self.pred_prob, feed_dict={self.x: ds._X_val})
             # Calculate val loss
             self.val_loss, val_acc, val_map = sess.run([self.cost, self.accuracy, self.MAP], feed_dict={self.x: ds._X_val, self.y: ds._Y_val})
             print('Final validation loss: ' + str(self.val_loss) + ', Validation accuracy: ' + str(val_acc) + ', Validation MAP: ' + str(val_map))
             
+            
     def predict(self, X_test):
         #Make predictions for test set with the best model
         checkpoint_dir = './checkpoints'
         saver = tf.train.Saver()
-        if self.best_loss > self.val_loss:
-            print('load best model')
+
+        ''' FIX: is removing the best model sometines
+        if self.best_loss < self.val_loss:
             checkpoint_path = os.path.join(checkpoint_dir, self.best_model_path)
-            
+            print('load best model: ' + str(checkpoint_path))
         else:
-            print('load last model')
             checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
+            print('load last model' + str(checkpoint_path))
+        '''
+        checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
         with tf.Session() as sess:
             saver.restore(sess, checkpoint_path)
             
@@ -246,7 +304,9 @@ class RNN_static:
                 pred_test.append(pred_test_split)
             #pred_test = sess.run(self.pred_prob, feed_dict={x: X_test})
 
+            print(pred_test[0].shape)
             pred_test = np.array(pred_test)
+            print(pred_test.shape)
             pred_test = pred_test.reshape((len(X_test), self.parameters['n_output']))
         
         return pred_test

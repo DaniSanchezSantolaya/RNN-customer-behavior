@@ -17,9 +17,11 @@ random.seed(17)
 np.random.seed(17)
 
 
-#python experiment.py representation max_interactions b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle
-#python experiment.py 4 10 False 0.2 adam 0.0001 64 128 lstm 1 0.1 0.0 sigmoid 40000 True
-#python experiment.py 4 5 True 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True
+#python experiment.py representation max_interactions padding b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle
+#python experiment.py 4 10 right False 0.2 adam 0.0001 64 128 lstm 1 0.1 0.0 sigmoid 40000 True
+#python experiment.py 4 5 left True 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True
+#python experiment.py 4 5 left False 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True
+#python experiment.py 1 6 right False 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 1000000 True
 
 
 
@@ -52,32 +54,60 @@ aux_features = [ 'ind_empleado_A', 'ind_empleado_B', 'ind_empleado_F', 'ind_empl
 					]
 					
 				
+aux_features = []
+
+if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 right True 0.1 adam 0.0001 16 128 lstm2 1 0.1 0.01 sigmoid 30000 True
+    representation = 4
+    max_interactions = 6
+    padding = 'right'
+    b_load_pickles = True
+    p_val = 0.1
 
 
+    #Model and training parameters
+    model_parameters = {}
+    model_parameters['opt'] = 'adam'
+    model_parameters['learning_rate'] = 0.001
+    model_parameters['n_hidden'] = 16
+    model_parameters['batch_size'] = 128
+    model_parameters['rnn_type'] = 'lstm2'
+    model_parameters['rnn_layers'] = 1
+    model_parameters['dropout'] = 0.1
+    model_parameters['l2_reg'] = 0.01
+    model_parameters['type_output'] = 'sigmoid'
+    model_parameters['max_steps'] = 30000
+    model_parameters['padding'] = padding
+
+    load_df_pickle = True
+
+else:
  
-#Representation parameters
-representation = int(sys.argv[1])
-max_interactions = int(sys.argv[2])
-b_load_pickles = str2bool(sys.argv[3])
-p_val = float(sys.argv[4])
-
-#Model and training parameters
-model_parameters = {}
-model_parameters['opt'] = sys.argv[5]
-model_parameters['learning_rate'] = float(sys.argv[6])
-model_parameters['n_hidden'] = int(sys.argv[7])
-model_parameters['batch_size'] = int(sys.argv[8])
-model_parameters['rnn_type'] = sys.argv[9]
-model_parameters['rnn_layers'] = int(sys.argv[10])
-model_parameters['dropout'] = float(sys.argv[11])
-model_parameters['l2_reg'] = float(sys.argv[12])
-model_parameters['type_output'] = sys.argv[13]
-model_parameters['max_steps'] = int(sys.argv[14])
-
-load_df_pickle = sys.argv[15]
+    #Representation parameters
+    representation = int(sys.argv[1])
+    max_interactions = int(sys.argv[2])
+    padding = sys.argv[3]
+    b_load_pickles = str2bool(sys.argv[4])
+    p_val = float(sys.argv[5])
 
 
-name_submission = 'kaggle_submissions/rep_' +str(representation) + '-interactions_' + str(max_interactions) + '-' + model_parameters['opt'] + '-lrate_' + str(model_parameters['learning_rate']) + '-hidden_' + str(model_parameters['n_hidden']) + '-bSize_' + str(model_parameters['batch_size']) + '-' + model_parameters['rnn_type'] + '-rnn_layers' + str(model_parameters['rnn_layers']) + '-dropout_' + str(model_parameters['dropout']) + '-L2_' + str(model_parameters['l2_reg']) + '-typeoutput_' + str(model_parameters['type_output']) + '-max_steps_' + str(model_parameters['max_steps']) 
+    #Model and training parameters
+    model_parameters = {}
+    model_parameters['opt'] = sys.argv[6]
+    model_parameters['learning_rate'] = float(sys.argv[7])
+    model_parameters['n_hidden'] = int(sys.argv[8])
+    model_parameters['batch_size'] = int(sys.argv[9])
+    model_parameters['rnn_type'] = sys.argv[10]
+    model_parameters['rnn_layers'] = int(sys.argv[11])
+    model_parameters['dropout'] = float(sys.argv[12])
+    model_parameters['l2_reg'] = float(sys.argv[13])
+    model_parameters['type_output'] = sys.argv[14]
+    model_parameters['max_steps'] = int(sys.argv[15])
+    model_parameters['padding'] = padding
+
+    load_df_pickle = sys.argv[16]
+
+
+name_submission = 'kaggle_submissions/rep_' +str(representation) + '-interactions_' + str(max_interactions) + '-padding_' + str(padding) + '-' + model_parameters['opt'] + '-lrate_' + str(model_parameters['learning_rate']) + '-hidden_' + str(model_parameters['n_hidden']) + '-bSize_' + str(model_parameters['batch_size']) + '-' + model_parameters['rnn_type'] + '-rnn_layers' + str(model_parameters['rnn_layers']) + '-dropout_' + str(model_parameters['dropout']) + '-L2_' + str(model_parameters['l2_reg']) + '-typeoutput_' + str(model_parameters['type_output']) + '-max_steps_' + str(model_parameters['max_steps']) 
 if len(aux_features) > 0:
     name_submission = name_submission + '_aux_features.csv'
 else:
@@ -86,6 +116,7 @@ else:
 print('Arguments: ')
 print('representation: ' + str(representation))
 print('max_interactions: ' + str(max_interactions))
+print('padding: ' + str(padding))
 print('Load pickle: ' + str(b_load_pickles))
 print('p_val: ' + str(p_val))
 print('opt: ' + str(model_parameters['opt']))
@@ -103,22 +134,24 @@ print('load_df_pickle: ' + str(load_df_pickle))
 
 #### Load pickle
 def load_pickles():
-	with open('pickles/X_train_rep' + str(representation) + '_' + str(max_interactions) + '.pickle', 'rb') as handle:
-		X_train = pickle.load(handle)
-	with open('pickles/X_test_rep_' + str(representation) + '_' + str(max_interactions) + '.pickle', 'rb') as handle:
-		X_test = pickle.load(handle)
-	with open('pickles/Y_train_rep_' + str(representation) + '_' + str(max_interactions) + '.pickle', 'rb') as handle:
-		Y_train = pickle.load(handle)
+    aux_features_length = str(len(aux_features))
+    with open('pickles/X_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length +  '.pickle', 'rb') as handle:
+        X_train = pickle.load(handle)
+    with open('pickles/X_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
+        X_test = pickle.load(handle)
+    with open('pickles/Y_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
+        Y_train = pickle.load(handle)
 
-	return X_train, Y_train, X_test
+    return X_train, Y_train, X_test
     
 def save_pickles(X_train, Y_train, X_test):
     #Save pickle
-    with open('pickles/X_train_rep' + str(representation) + '_' + str(max_interactions) + '.pickle', 'wb') as handle:
+    aux_features_length = str(len(aux_features))
+    with open('pickles/X_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
         pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open('pickles/X_test_rep_' + str(representation) + '_' + str(max_interactions) + '.pickle', 'wb') as handle:
+    with open('pickles/X_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
         pickle.dump(X_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open('pickles/Y_train_rep_' + str(representation) + '_' + str(max_interactions) + '.pickle', 'wb') as handle:
+    with open('pickles/Y_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
         pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
@@ -164,7 +197,7 @@ else:
         df = load_train_from_pickle_interactions()
     else:
         df = load_train_csv()
-    X_train, Y_train, X_test  = build_train_and_test(df, df_test, representation, max_interactions, aux_features)
+    X_train, Y_train, X_test  = build_train_and_test(df, df_test, representation, max_interactions, aux_features, padding)
     save_pickles(X_train, Y_train, X_test)
 
 
@@ -174,7 +207,6 @@ Y_train = np.array(Y_train)
 X_train, X_val, X_test, Y_train, Y_val = generate_validation_set(X_train, Y_train, X_test)
 
 model_parameters['n_input'] = X_train[0].toarray().shape[1]
-print(Y_train[0])
 model_parameters['n_output'] = Y_train[0].toarray().shape[1]
 model_parameters['seq_length'] = X_train[0].toarray().shape[0]
 print('num features: ' + str(model_parameters['n_input']))
@@ -263,46 +295,66 @@ ncodpers_test = df_test['ncodpers']
 
 f = open(name_submission, 'w')
 f.write('ncodpers,added_products\n')
-pred_int = 0
-pred_no_int = 0
-for i in range(len(ncodpers_test)):
 
-    f.write(str(ncodpers_test[i]) + ',')  # python will convert \n to os.linesep
-    
-    #last_values = df[df.ncodpers == ncodpers_test[i]][target_columns].values[-1] #Slow, probably better build a dictionary
-    last_values = dict_last_values[ncodpers_test[i]]
-    
-    #If contains interactions we use the model
-    if (1 in X_test[i]) or (-1 in X_test[i]): #Check
-        pred_int = pred_int + 1
-        num_added = 0
+if representation == 1:
+    for i in range(len(ncodpers_test)):
         sorted_pred, sorted_prods = zip(*sorted(zip(pred_test[i], target_columns), reverse=True ))  
-        for prob,prod in zip(sorted_pred, sorted_prods):
-            #Check if the product was already added - FIX, now it's different
-            idx_prod = target_columns.index(prod)
-            if last_values[idx_prod] == 0:
-                f.write(prod + ' ')
-                num_added += 1
-                if num_added == 7:
-                    break
-                    
-    else: #if there is no interactions, we use the baseline most added products
-        pred_no_int = pred_no_int + 1
+        f.write(str(ncodpers_test[i]) + ',')  # python will convert \n to os.linesep
         num_added = 0
-        for prod in sorted_prods_total:
-            #Check if the product was already added - FIX, now it's different
+        for prob,prod in zip(sorted_pred, sorted_prods):
+            #Check if the product was already added
             idx_prod = target_columns.index(prod)
-            if last_values[idx_prod] == 0:
+            if X_test[i][-1][idx_prod] == 0:
                 f.write(prod + ' ')
                 num_added += 1
                 if num_added == 7:
                     break
-    f.write('\n')
-    if i % 100000 == 0:
-        print(i)
+        f.write('\n')
+        if i % 100000 == 0:
+            print(i)
+else:
+
+    pred_int = 0
+    pred_no_int = 0
+    for i in range(len(ncodpers_test)):
+
+        f.write(str(ncodpers_test[i]) + ',')  # python will convert \n to os.linesep
+        
+        #last_values = df[df.ncodpers == ncodpers_test[i]][target_columns].values[-1] #Slow, probably better build a dictionary
+        last_values = dict_last_values[ncodpers_test[i]]
+        
+        #If contains interactions we use the model
+        if (1 in X_test[i]) or (-1 in X_test[i]): #Check
+            pred_int = pred_int + 1
+            num_added = 0
+            sorted_pred, sorted_prods = zip(*sorted(zip(pred_test[i], target_columns), reverse=True ))  
+            for prob,prod in zip(sorted_pred, sorted_prods):
+                #Check if the product was already added - FIX, now it's different
+                idx_prod = target_columns.index(prod)
+                if last_values[idx_prod] == 0:
+                    f.write(prod + ' ')
+                    num_added += 1
+                    if num_added == 7:
+                        break
+                        
+        else: #if there is no interactions, we use the baseline most added products
+            pred_no_int = pred_no_int + 1
+            num_added = 0
+            for prod in sorted_prods_total:
+                #Check if the product was already added - FIX, now it's different
+                idx_prod = target_columns.index(prod)
+                if last_values[idx_prod] == 0:
+                    f.write(prod + ' ')
+                    num_added += 1
+                    if num_added == 7:
+                        break
+        f.write('\n')
+        if i % 100000 == 0:
+            print(i)
+    print('Predictions with interactions: ' + str(pred_int))
+    print('Predictions with no interactions: ' + str(pred_no_int))
 
 f.close()  
 
-print('Predictions with interactions: ' + str(pred_int))
-print('Predictions with no interactions: ' + str(pred_no_int))
+    
 
