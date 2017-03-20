@@ -7,7 +7,8 @@ import pickle
 import os
 from preprocess_santander import * 
 from dataset import *
-from rnn_static import *
+#from rnn_static import *
+from rnn_dynamic import *
 import tensorflow as tf
 from tensorflow.contrib import rnn
 import sys
@@ -21,7 +22,8 @@ np.random.seed(17)
 #python experiment.py 4 10 right False 0.2 adam 0.0001 64 128 lstm 1 0.1 0.0 sigmoid 40000 True
 #python experiment.py 4 5 left True 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True
 #python experiment.py 4 5 left False 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True
-#python experiment.py 1 6 right False 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 1000000 True
+#python experiment.py 4 6 right True 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 1000000 True
+
 
 
 
@@ -141,10 +143,14 @@ def load_pickles():
         X_test = pickle.load(handle)
     with open('pickles/Y_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
         Y_train = pickle.load(handle)
+    with open('pickles/X_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
+        X_local_test = pickle.load(handle)
+    with open('pickles/Y_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
+        Y_local_test = pickle.load(handle)
 
-    return X_train, Y_train, X_test
+    return X_train, Y_train, X_test, X_local_test, Y_local_test
     
-def save_pickles(X_train, Y_train, X_test):
+def save_pickles(X_train, Y_train, X_test, X_local_test, Y_local_test):
     #Save pickle
     aux_features_length = str(len(aux_features))
     with open('pickles/X_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
@@ -153,6 +159,10 @@ def save_pickles(X_train, Y_train, X_test):
         pickle.dump(X_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
     with open('pickles/Y_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
         pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    with open('pickles/X_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
+        pickle.dump(X_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    with open('pickles/Y_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
+        pickle.dump(Y_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
         
@@ -190,15 +200,15 @@ def generate_validation_set(X_train, Y_train, X_test):
 df_test = load_test_csv()
 if b_load_pickles:
     print('Load pickles')
-    X_train, Y_train, X_test= load_pickles()
+    X_train, Y_train, X_test, X_local_test, Y_local_test = load_pickles()
 else:
     print('Build pickles')
     if load_df_pickle:
         df = load_train_from_pickle_interactions()
     else:
         df = load_train_csv()
-    X_train, Y_train, X_test  = build_train_and_test(df, df_test, representation, max_interactions, aux_features, padding)
-    save_pickles(X_train, Y_train, X_test)
+    X_train, Y_train, X_test, X_local_test, Y_local_test = build_train_and_test(df, df_test, representation, max_interactions, aux_features, padding)
+    save_pickles(X_train, Y_train, X_test, X_local_test, Y_local_test)
 
 
 
@@ -223,7 +233,19 @@ Y_val = []
 model = RNN_static(model_parameters)
 model.create_model()
 model.train(ds)
-pred_test = model.predict(X_test)
+#for rep4 obtain only test samples with interactions
+if representation == 4:
+    indices_interactions = []
+    for i in range(len(X_test)):
+        if np.count_nonzero(X_test[i]) > 0:
+            indices_interactions.append(i)
+    #val_idx, training_idx = indices[:num_val], indices[num_val:]
+    #X_val, X_train = X_train[val_idx], X_train[training_idx]
+    #Y_val, Y_train  = Y_train[val_idx], Y_train[training_idx]
+    pred_test = np.zeros((len(X_test), model_parameters['n_output']))
+    pred_test[indices_interactions] = model.predict(X_test[indices_interactions])
+else:
+    pred_test = model.predict(X_test)
 
 
 def compute_most_added_products():
@@ -296,7 +318,7 @@ ncodpers_test = df_test['ncodpers']
 f = open(name_submission, 'w')
 f.write('ncodpers,added_products\n')
 
-if representation == 1:
+if (representation == 1) or (representation == 2):
     for i in range(len(ncodpers_test)):
         sorted_pred, sorted_prods = zip(*sorted(zip(pred_test[i], target_columns), reverse=True ))  
         f.write(str(ncodpers_test[i]) + ',')  # python will convert \n to os.linesep
@@ -356,5 +378,94 @@ else:
 
 f.close()  
 
+
+
+
+#Evaluate on local test set   
+total_no_interactions = 0
+array_ordered = np.arange(1, 25)
+def evaluate_sample(predictions, y_true, k):
+    global total_no_interactions
+    global array_ordered
+    sorted_pred, sorted_y = zip(*sorted(zip(predictions, y_true[0]), reverse=True )) #TODO: Discard the products that were already part of the portfolio in the last step
+    #Recall at k
+    true_pos_k = sum(sorted_y[0:k])
+    num_pos = sum(y_true[0])
+    recall_user = (true_pos_k/float(num_pos))
+    #Map at k
+    precisions = sorted_y/array_ordered
+    sum_precisions = np.sum(precisions[:k])
+    if num_pos == 0:
+        map_k = 0
+        recall_user = 0
+        total_no_interactions += 1
+    else:
+        map_k = sum_precisions/min(num_pos, k)
+
+    return recall_user, true_pos_k, num_pos, map_k
+
+X_local_test = np.array(X_local_test)
+Y_local_test = np.array(Y_local_test)
+k = 7
+
+recall_users = []
+total_true_pos_k = 0
+total_pos = 0
+if representation == 2:
+    pred_local_test = model.predict(X_local_test)
+    
+    for i in range(len(pred_local_test)):
+        #sorted_pred, sorted_y = zip(*sorted(zip(pred_local_test[i], X_local_test[i]), reverse=True ))
+        recall_user, true_pos_k, num_pos, map_k = evaluate_sample(pred_local_test[i], Y_local_test[i], k)
+        recall_users.append(recall_user)
+        total_true_pos_k += true_pos_k
+        total_pos += num_pos
+elif representation==4:
+    print('Local test rep 4')
+    pred_local_test = np.zeros((len(X_local_test), model_parameters['n_output']))
+    pred_local_test = model.predict(X_local_test)
+    
+   
+    for i in range(len(X_local_test)):  
+        #sorted_pred, sorted_y = zip(*sorted(zip(pred_local_test[i], Y_local_test[i]), reverse=True )) #TODO: Discard the products that were already part of the portfolio in the last step
+        recall_user, true_pos_k, num_pos, map_k = evaluate_sample(pred_local_test[i], Y_local_test[i], k)
+        recall_users.append(recall_user)
+        total_true_pos_k += true_pos_k
+        total_pos += num_pos
+        if i % 100000 == 0:
+            print(i)
+        
+print('Results local test:')
+print('Total users evaluated: ' + str(len(recall_users)))
+print('Total True positives at k: :' + str(total_true_pos_k))
+print('Total True positives: ' + str(total_pos))
+recall_k = total_true_pos_k/ float(total_pos)
+print('Total Recall at ' + str(k) + ': ' + str(recall_k))
+print('Mean recall at ' + str(k) + ' by user: ' + str(np.mean(recall_users)))
+print('Mean map at ' + str(k) + ' by user: ' + str(map_k))
+print('Total no interactions: ' + str(total_no_interactions))
+
+#Most added producs baseline
+for i in range(len(pred_local_test)):
+    recall_user, true_pos_k, num_pos, map_k = evaluate_sample(sorted_freq, Y_local_test[i], k)
+    recall_users.append(recall_user)
+    total_true_pos_k += true_pos_k
+    total_pos += num_pos
+
+print('Results local test BASELINE:')
+print('Total users evaluated: ' + str(len(recall_users)))
+print('Total True positives at k: :' + str(total_true_pos_k))
+print('Total True positives: ' + str(total_pos))
+recall_k = total_true_pos_k/ float(total_pos)
+print('Total Recall at ' + str(k) + ': ' + str(recall_k))
+print('Mean recall at ' + str(k) + ' by user: ' + str(np.mean(recall_users)))
+print('Mean map at ' + str(k) + ' by user: ' + str(map_k))       
+
+
+#ML baseline
+#from sklearn.ensemble import RandomForestClassifier
+#clf = RandomForestClassifier(n_estimators=25)
+#clf.fit(X_train_valid, y_train_valid)
+#clf_probs = clf.predict_proba(X_test)
     
 
