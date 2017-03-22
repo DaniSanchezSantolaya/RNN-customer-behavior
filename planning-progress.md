@@ -15,6 +15,8 @@ Think what to do different so the work incorporates some novelty
 
 Prepare new test set in Santander data and evaluate with MAP and Top-k recall with this set
 
+https://docs.google.com/presentation/d/14_fVwW7dabPPEALI2-54IPLOAdcRSCs8LxFWvRug8BI/edit?usp=sharing
+
 # 8 March - 15 March
 
 Expand thesis proporsal with: data, evaluation, and baselines
