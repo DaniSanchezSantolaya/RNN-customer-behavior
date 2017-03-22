@@ -456,7 +456,8 @@ def build_rep_4(df, df_test, max_interactions, aux_features, padding):
         a = 0
         ncodpers_test = df_test['ncodpers'].tolist()
         X_test = np.zeros((len(ncodpers_test), max_interactions, len(columns_pos_interaction) + len(columns_pos_interaction) + 1 + len(aux_features)), dtype=np.int8)
-        grouped = df.groupby('ncodpers')
+        local_test_date = df.fecha_dato.max()
+        grouped = df[df.fecha_dato != local_test_date].groupby('ncodpers')
         for ncodpers,group in grouped:
             
             interactions = group[columns_pos_interaction + columns_neg_interaction + [time_column] + aux_features]

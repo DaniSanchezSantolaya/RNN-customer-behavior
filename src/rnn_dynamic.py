@@ -72,10 +72,16 @@ class RNN_static:
             sequence_length=_seq_length(self.x)
         )
 
-
-        last_relevant_output = _last_relevant(outputs, _seq_length(self.x))
+        #Obtaining the correct output state
+        if self.parameters['padding'].lower() == 'right': #If padding zeros is at right, we need to get the right output, since the last is not validation
+            last_relevant_output = _last_relevant(outputs, _seq_length(self.x))
+        elif self.parameters['padding'].lower() == 'left':
+            last_relevant_output = outputs[:,-1,:]
+        
 
         logits = tf.matmul(last_relevant_output, weights['out']) + biases['out']
+        #self._debug = logits
+        #self._debug = outputs
 
         if self.parameters['type_output'].lower() == 'sigmoid':
             self.pred_prob = tf.sigmoid(logits)
@@ -179,6 +185,7 @@ class RNN_static:
             #while ds._epochs_completed < 10:
                 batch_x, batch_y = ds.next_batch(self.parameters['batch_size'])
                 # Run optimization op (backprop)
+                
                 sess.run(self.optimizer, feed_dict={self.x: batch_x, self.y: batch_y})
                 _, c = sess.run([self.optimizer, self.loss],
                                              feed_dict={self.x: batch_x, self.y: batch_y})
