@@ -1,8 +1,17 @@
+# 22 March - 29 March
+
+Experiment with the approach of different timescales
+
+Experiment with PEGA data if available
+
+Review if Phased LSTM can be used
+
+Think new ways for evaluation
+
 # 15 March - 22 March
 
 Think what to do different so the work incorporates some novelty
 
-Experiment with PEGA data
 
 Prepare new test set in Santander data and evaluate with MAP and Top-k recall with this set
 
