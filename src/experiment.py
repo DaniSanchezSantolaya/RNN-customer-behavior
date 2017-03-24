@@ -25,6 +25,7 @@ np.random.seed(17)
 #python experiment.py 4 5 left True 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7]
 #python experiment.py 4 5 left False 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7]
 #python experiment.py 4 6 right True 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 1000000 True [2,3,4,5,6,7]
+#python experiment.py 5 5 right False 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 10000 True [2,3,4,5,6,7]
 
 
 
@@ -235,7 +236,7 @@ Y_val = []
 
 
 #Create tensorflow model
-model = RNN_static(model_parameters)
+model = RNN_dynamic(model_parameters)
 model.create_model()
 model.train(ds)
 #for rep4 obtain only test samples with interactions

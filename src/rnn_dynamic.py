@@ -2,6 +2,7 @@
 import tensorflow as tf
 import numpy as np
 import os
+#from PhasedLSTMCell_v1 import *
 
 
 def _seq_length(sequence):
@@ -22,7 +23,7 @@ def _last_relevant(output, length):
     
     
     
-class RNN_static:
+class RNN_dynamic:
 
     def __init__(self, parameters):
 
@@ -53,6 +54,8 @@ class RNN_static:
             rnn_cell = tf.nn.rnn_cell.LSTMCell(self.parameters['n_hidden'])
         elif self.parameters['rnn_type'] == 'rnn':
             rnn_cell = tf.nn.rnn_cell.BasicRNNCell(self.parameters['n_hidden'])
+        elif self.parameters['rnn_type'] == 'plstm':
+            rnn_cell = PhasedLSTMCell(self.parameters['n_hidden'])
 
                 
         #Add dropout
@@ -74,12 +77,12 @@ class RNN_static:
 
         #Obtaining the correct output state
         if self.parameters['padding'].lower() == 'right': #If padding zeros is at right, we need to get the right output, since the last is not validation
-            last_relevant_output = _last_relevant(outputs, _seq_length(self.x))
+            self.last_relevant_output = _last_relevant(outputs, _seq_length(self.x))
         elif self.parameters['padding'].lower() == 'left':
-            last_relevant_output = outputs[:,-1,:]
+            self.last_relevant_output = outputs[:,-1,:]
         
 
-        logits = tf.matmul(last_relevant_output, weights['out']) + biases['out']
+        logits = tf.matmul(self.last_relevant_output, weights['out']) + biases['out']
         #self._debug = logits
         #self._debug = outputs
 
@@ -267,3 +270,25 @@ class RNN_static:
             #pred_test = pred_test.reshape((len(X_test), self.parameters['n_output']))
         
         return pred_test
+        
+    def get_last_hidden_state(self, X_test):
+        #Make predictions for test set with the best model
+        checkpoint_dir = './checkpoints'
+        saver = tf.train.Saver()
+
+        ''' FIX: is removing the best model sometines
+        if self.best_loss < self.val_loss:
+            checkpoint_path = os.path.join(checkpoint_dir, self.best_model_path)
+            print('load best model: ' + str(checkpoint_path))
+        else:
+            checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
+            print('load last model' + str(checkpoint_path))
+        '''
+        checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
+        with tf.Session() as sess:
+            saver.restore(sess, checkpoint_path)
+            last_hidden_state = sess.run(self.last_relevant_output, feed_dict={self.x: X_test})
+
+            
+        
+        return last_hidden_state
