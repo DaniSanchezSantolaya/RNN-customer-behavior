@@ -3,7 +3,6 @@ import tensorflow as tf
 import numpy as np
 import os
 #from PhasedLSTMCell_v1 import *
-from PhasedLSTMCell import *
 
 
 def _seq_length(sequence):
@@ -24,39 +23,24 @@ def _last_relevant(output, length):
     
     
     
-class RNN_dynamic:
+class model_2RNN:
 
     def __init__(self, parameters):
 
         self.parameters = parameters
         
-    def create_model(self):
-        tf.reset_default_graph()
-
-        # tf Graph input
-        self.x = tf.placeholder("float", [None, self.parameters['seq_length'], self.parameters['n_input']], name='x')
-        self.y = tf.placeholder("float", [None, self.parameters['n_output']], name='y')
-
-        # Define weights
-        weights = {
-            'out': tf.Variable(tf.random_normal([self.parameters['n_hidden'], self.parameters['n_output']]))
-        }
-        biases = {
-            'out': tf.Variable(tf.random_normal([self.parameters['n_output']]))
-        }
-
-
+    def _define_rnn(n_hidden):
         # Define a lstm cell with tensorflow
         if self.parameters['rnn_type'].lower() == 'lstm':
-            rnn_cell = tf.nn.rnn_cell.BasicLSTMCell(self.parameters['n_hidden'], forget_bias=1.0)
+            rnn_cell = tf.nn.rnn_cell.BasicLSTMCell(n_hidden, forget_bias=1.0)
         elif self.parameters['rnn_type'].lower() == 'gru':
-            rnn_cell = tf.nn.rnn_cell.GRUCell(self.parameters['n_hidden'])
+            rnn_cell = tf.nn.rnn_cell.GRUCell(n_hidden)
         elif self.parameters['rnn_type'] == 'lstm2':
-            rnn_cell = tf.nn.rnn_cell.LSTMCell(self.parameters['n_hidden'])
+            rnn_cell = tf.nn.rnn_cell.LSTMCell(n_hidden)
         elif self.parameters['rnn_type'] == 'rnn':
-            rnn_cell = tf.nn.rnn_cell.BasicRNNCell(self.parameters['n_hidden'])
+            rnn_cell = tf.nn.rnn_cell.BasicRNNCell(n_hidden)
         elif self.parameters['rnn_type'] == 'plstm':
-            rnn_cell = PhasedLSTMCell(self.parameters['n_hidden'], use_peepholes=True, state_is_tuple=True)
+            rnn_cell = PhasedLSTMCell(n_hidden)
 
                 
         #Add dropout
@@ -64,7 +48,7 @@ class RNN_dynamic:
             keep_prob = 1 - self.parameters['dropout']
             rnn_cell = tf.nn.rnn_cell.DropoutWrapper(rnn_cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
             
-            
+        #stack rnn cells
         if self.parameters['rnn_layers'] > 1:
             rnn_cell = tf.nn.rnn_cell.MultiRNNCell([rnn_cell] * self.parameters['rnn_layers'])  
             
@@ -78,12 +62,38 @@ class RNN_dynamic:
 
         #Obtaining the correct output state
         if self.parameters['padding'].lower() == 'right': #If padding zeros is at right, we need to get the right output, since the last is not validation
-            self.last_relevant_output = _last_relevant(outputs, _seq_length(self.x))
+            last_relevant_output = _last_relevant(outputs, _seq_length(self.x))
         elif self.parameters['padding'].lower() == 'left':
-            self.last_relevant_output = outputs[:,-1,:]
+            last_relevant_output = outputs[:,-1,:]
+            
+        return last_relevant_output
         
+    def create_model(self):
+        tf.reset_default_graph()
 
-        logits = tf.matmul(self.last_relevant_output, weights['out']) + biases['out']
+        # tf Graph input
+        self.x = tf.placeholder("float", [None, self.parameters['seq_length'], self.parameters['n_input']], name='x')
+        self.x_events = tf.placeholder("float", [None, self.parameters['max_events'], self.parameters['n_input_events']], name='x_events')
+        self.y = tf.placeholder("float", [None, self.parameters['n_output']], name='y')
+
+        # Define weights
+        weights = {
+            'out': tf.Variable(tf.random_normal([self.parameters['n_hidden'] + self.parameters['n_hidden_events'], self.parameters['n_output']]))
+        }
+        biases = {
+            'out': tf.Variable(tf.random_normal([self.parameters['n_output']]))
+        }
+
+        
+        #RNN1
+        
+        self.rnn1_output = self._define_rnn(self.parameters['n_hidden'])
+        self.rnn2_output = self._define_rnn(self.parameters['n_hidden_events'])
+        
+        self.rnn_concat = tf.concat(1, [self.rnn1_output, self.rnn2_output])
+     
+        
+        logits = tf.matmul(self.rnn_concat, weights['out']) + biases['out']
         #self._debug = logits
         #self._debug = outputs
 
@@ -176,32 +186,31 @@ class RNN_dynamic:
         # Create a saver.
         saver = tf.train.Saver()
         checkpoint_dir = './checkpoints'
-        parameters_str = str(self.parameters['rnn_type']) + '-' + str(self.parameters['n_hidden']) + '-' + str(self.parameters['rnn_layers']) + '-' + str(self.parameters['batch_size']) + '-' + str(self.parameters['opt']) + '-' + str(self.parameters['max_steps'])
         self.best_loss = 150000000
         # Launch the graph
         with tf.Session() as sess:
             merged = tf.summary.merge_all()
-            test_writer = tf.summary.FileWriter('tensorboard/Santander/' + str(parameters_str), sess.graph)
+            test_writer = tf.summary.FileWriter('tensorboard/Santander/test', sess.graph)
             sess.run(self.init)
 
             step = 1
             # Keep training until reach max iterations
             while step * self.parameters['batch_size'] < self.parameters['max_steps']:
             #while ds._epochs_completed < 10:
-                batch_x, batch_y = ds.next_batch(self.parameters['batch_size'])
+                batch_x, batch_x_events, batch_y = ds.next_batch(self.parameters['batch_size'])
                 # Run optimization op (backprop)
                 
-                sess.run(self.optimizer, feed_dict={self.x: batch_x, self.y: batch_y})
+                sess.run(self.optimizer, feed_dict={self.x: batch_x, self.x_events: batch_x_events, self.y: batch_y})
                 _, c = sess.run([self.optimizer, self.loss],
-                                             feed_dict={self.x: batch_x, self.y: batch_y})
+                                             feed_dict={self.x: batch_x, self.x_events: batch_x_events, self.y: batch_y})
                 
                 if step % display_step == 0:
                     # Calculate batch loss
-                    loss = sess.run(self.loss, feed_dict={self.x: batch_x, self.y: batch_y})
+                    loss = sess.run(self.loss, feed_dict={self.x: batch_x, self.x_events: batch_x_events, self.y: batch_y})
                     print("Iter " + str(step*self.parameters['batch_size']) + ", Minibatch train Loss= " + 
                           "{:.6f}".format(loss))
                     # Calculate val loss
-                    self.val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_val, self.y:ds._Y_val})
+                    self.val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_val, self.x_events: ds._X_val_events,  self.y:ds._Y_val})
                     test_writer.add_summary(summary, step)
                     print('Val loss: ' + str(self.val_loss) + ', Val accuracy: ' + str(val_acc) + ', Val MAP: ' + str(val_map))
                     if self.val_loss < self.best_loss:
@@ -222,12 +231,12 @@ class RNN_dynamic:
             print("Optimization Finished!")
             
             
-            pred_val = sess.run(self.pred_prob, feed_dict={self.x: ds._X_val})
+            pred_val = sess.run(self.pred_prob, feed_dict={self.x: ds._X_val, self.x_events: ds._X_val_events})
             # Calculate val loss
-            self.val_loss, val_acc, val_map = sess.run([self.loss, self.accuracy, self.MAP], feed_dict={self.x: ds._X_val, self.y: ds._Y_val})
+            self.val_loss, val_acc, val_map = sess.run([self.loss, self.accuracy, self.MAP], feed_dict={self.x: ds._X_val, self.x_events: ds._X_val_events, self.y: ds._Y_val})
             print('Final validation loss: ' + str(self.val_loss) + ', Validation accuracy: ' + str(val_acc) + ', Validation MAP: ' + str(val_map))
             
-    def predict(self, X_test):
+    def predict(self, X_test, X_test_events):
         #Make predictions for test set with the best model
         checkpoint_dir = './checkpoints'
         saver = tf.train.Saver()
@@ -255,11 +264,11 @@ class RNN_dynamic:
                 print('Initial index: ' + str(initial_idx))
                 print('final_idx index: ' + str(final_idx))
                 if i < (num_test_splits - 1):
-                    pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:final_idx]})
+                    pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:final_idx], self.x_events: X_test_events[initial_idx:final_idx]})
                     print(pred_test_split.shape)
                     pred_test[initial_idx:final_idx] = pred_test_split
                 else:
-                    pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:]})
+                    pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:], self.x_events: X_test_events[initial_idx:final_idx]})
                     print(pred_test_split.shape)
                     pred_test[initial_idx:] = pred_test_split
                 #pred_test.append(pred_test_split)
@@ -273,7 +282,7 @@ class RNN_dynamic:
         
         return pred_test
         
-    def get_last_hidden_state(self, X_test):
+    def get_last_hidden_state(self, X_test, X_test_events):
         #Make predictions for test set with the best model
         checkpoint_dir = './checkpoints'
         saver = tf.train.Saver()
@@ -289,7 +298,7 @@ class RNN_dynamic:
         checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
         with tf.Session() as sess:
             saver.restore(sess, checkpoint_path)
-            last_hidden_state = sess.run(self.last_relevant_output, feed_dict={self.x: X_test})
+            last_hidden_state = sess.run(self.rnn_concat, feed_dict={self.x: X_test, self.x_events: X_test_events})
 
             
         

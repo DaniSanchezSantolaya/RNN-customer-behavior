@@ -8,7 +8,7 @@ import os
 from preprocess_santander import * 
 from dataset import *
 #from rnn_static import *
-from rnn_dynamic import *
+from model2_RNN import *
 import tensorflow as tf
 from tensorflow.contrib import rnn
 import sys
@@ -20,12 +20,8 @@ random.seed(17)
 np.random.seed(17)
 
 
-#python experiment.py representation max_interactions padding b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle ks
-#python experiment.py 4 10 right False 0.2 adam 0.0001 64 128 lstm 1 0.1 0.0 sigmoid 40000 True [2,3,4,5,6,7]
-#python experiment.py 4 5 left True 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7]
-#python experiment.py 4 5 left False 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7]
-#python experiment.py 4 6 right True 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 1000000 True [2,3,4,5,6,7]
-#python experiment.py 5 5 right False 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 10000 True [2,3,4,5,6,7]
+#python experiment_model2RNN.py representation max_interactions padding b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle ks n_hidden_events max_events
+#python experiment_model2RNN.py 5 5 right False 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 10000 True [2,3,4,5,6,7] 32 10
 
 
 
@@ -82,6 +78,8 @@ if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 
     model_parameters['type_output'] = 'sigmoid'
     model_parameters['max_steps'] = 30000
     model_parameters['padding'] = padding
+    model_parameters['n_hidden_events'] = 16
+    model_parameters['max_events'] = 5
 
     load_df_pickle = True
     k = 7
@@ -109,13 +107,15 @@ else:
     model_parameters['type_output'] = sys.argv[14]
     model_parameters['max_steps'] = int(sys.argv[15])
     model_parameters['padding'] = padding
+    model_parameters['n_hidden_events'] = int(sys.argv[18])
+    model_parameters['max_events'] = int(sys.argv[19])
 
     load_df_pickle = sys.argv[16]
     ks =  ast.literal_eval(sys.argv[17])
 
 
 
-name_submission = 'kaggle_submissions/rep_' +str(representation) + '-interactions_' + str(max_interactions) + '-padding_' + str(padding) + '-' + model_parameters['opt'] + '-lrate_' + str(model_parameters['learning_rate']) + '-hidden_' + str(model_parameters['n_hidden']) + '-bSize_' + str(model_parameters['batch_size']) + '-' + model_parameters['rnn_type'] + '-rnn_layers' + str(model_parameters['rnn_layers']) + '-dropout_' + str(model_parameters['dropout']) + '-L2_' + str(model_parameters['l2_reg']) + '-typeoutput_' + str(model_parameters['type_output']) + '-max_steps_' + str(model_parameters['max_steps']) 
+name_submission = 'kaggle_submissions/rep_' +str(representation) + '-interactions_' + str(max_interactions) + '-padding_' + str(padding) + '-' + model_parameters['opt'] + '-lrate_' + str(model_parameters['learning_rate']) + '-hidden_' + str(model_parameters['n_hidden']) + '-bSize_' + str(model_parameters['batch_size']) + '-' + model_parameters['rnn_type'] + '-rnn_layers' + str(model_parameters['rnn_layers']) + '-dropout_' + str(model_parameters['dropout']) + '-L2_' + str(model_parameters['l2_reg']) + '-typeoutput_' + str(model_parameters['type_output']) + '-max_steps_' + str(model_parameters['max_steps']) + '-n_hidden_events_' + str(model_parameters['n_hidden_events']) 
 if len(aux_features) > 0:
     name_submission = name_submission + '_aux_features.csv'
 else:
@@ -137,42 +137,57 @@ print('dropout: ' + str(model_parameters['dropout']))
 print('l2_reg: ' + str(model_parameters['l2_reg']))
 print('type_output: ' + str(model_parameters['type_output']))
 print('max_steps: ' + str(model_parameters['max_steps']))
+print('n_hidden_events: ' + str(model_parameters['n_hidden_events']))
+print('max_events: ' + str(model_parameters['max_events']))
 print('load_df_pickle: ' + str(load_df_pickle))
+
 
 
 #### Load pickle
 def load_pickles():
     aux_features_length = str(len(aux_features))
-    with open('pickles/X_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length +  '.pickle', 'rb') as handle:
+    with open('pickles/2RNN_X_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length +  '.pickle', 'rb') as handle:
         X_train = pickle.load(handle)
-    with open('pickles/X_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
+    with open('pickles/2RNN_X_train_events_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
+        X_train_events = pickle.load(handle)
+    with open('pickles/2RNN_X_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
         X_test = pickle.load(handle)
-    with open('pickles/Y_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
+    with open('pickles/2RNN_X_test_events_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
+        X_test_events = pickle.load(handle)
+    with open('pickles/2RNN_Y_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
         Y_train = pickle.load(handle)
-    with open('pickles/X_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
+    with open('pickles/2RNN_X_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
         X_local_test = pickle.load(handle)
-    with open('pickles/Y_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
+    with open('pickles/2RNN_X_events_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
+        X_events_local_test = pickle.load(handle)
+    with open('pickles/2RNN_Y_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'rb') as handle:
         Y_local_test = pickle.load(handle)
 
-    return X_train, Y_train, X_test, X_local_test, Y_local_test
+    return X_train, X_train_events, Y_train, X_test, X_test_events, X_local_test, X_events_local_test, Y_local_test
     
-def save_pickles(X_train, Y_train, X_test, X_local_test, Y_local_test):
+def save_pickles(X_train, X_train_events, Y_train, X_test, X_test_events, X_local_test, X_events_local_test, Y_local_test):
     #Save pickle
     aux_features_length = str(len(aux_features))
-    with open('pickles/X_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
+    with open('pickles/2RNN_X_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
         pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open('pickles/X_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
+    with open('pickles/2RNN_X_train_events_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
+        pickle.dump(X_train_events, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    with open('pickles/2RNN_X_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
         pickle.dump(X_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open('pickles/Y_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
+    with open('pickles/2RNN_X_test_events_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
+        pickle.dump(X_test_events, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    with open('pickles/2RNN_Y_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
         pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open('pickles/X_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
+    with open('pickles/2RNN_X_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
         pickle.dump(X_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    with open('pickles/Y_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
+    with open('pickles/2RNN_X_events_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
+        pickle.dump(X_events_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    with open('pickles/2RNN_Y_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '.pickle', 'wb') as handle:
         pickle.dump(Y_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
         
-def generate_validation_set(X_train, Y_train, X_test):
+def generate_validation_set(X_train, X_train_events, Y_train, X_test, X_test_events):
     print('Initial X_train size: ' + str( len(X_train)))
     print('Initial Y_train size: ' + str( len(Y_train)))
     print('Initial X_test size: ' + str( len(X_test)))
@@ -181,17 +196,20 @@ def generate_validation_set(X_train, Y_train, X_test):
 
     indices = np.random.permutation(len(X_train))
     val_idx, training_idx = indices[:num_val], indices[num_val:]
-    X_val, X_train = X_train[val_idx], X_train[training_idx]
+    X_val, X_val_events, X_train, X_train_events = X_train[val_idx], X_train_events[val_idx], X_train[training_idx], X_train_events[training_idx]
     Y_val, Y_train  = Y_train[val_idx], Y_train[training_idx]
 
     
     #Transform validatoin format to np.array
     X_val2 = []
+    X_val2_events = []
     Y_val2 = []
-    for x,y in zip(X_val, Y_val):
+    for x,x_event,y in zip(X_val, X_val_events, Y_val):
         X_val2.append(x.toarray())
+        X_val2_events.append(x_event.toarray())
         Y_val2.append(y.toarray().reshape(y.toarray().shape[1]))
     X_val = np.array(X_val2)
+    X_val_events = np.array(X_val2_events)
     Y_val = np.array(Y_val2)
 
 
@@ -201,26 +219,27 @@ def generate_validation_set(X_train, Y_train, X_test):
     print('Final Y_val size: ' + str( len(Y_val)))
     print('Final X_test size: ' + str( len(X_test)))
 
-    return X_train, X_val, X_test, Y_train, Y_val        
+    return X_train, X_train_events, X_val, X_val_events, X_test, X_test_events, Y_train, Y_val        
         
 df_test = load_test_csv()
 if b_load_pickles:
     print('Load pickles')
-    X_train, Y_train, X_test, X_local_test, Y_local_test = load_pickles()
+    X_train, X_train_events, Y_train, X_test, X_test_events, X_local_test, X_events_local_test, Y_local_test = load_pickles()
 else:
     print('Build pickles')
     if load_df_pickle:
         df = load_train_from_pickle_interactions()
     else:
         df = load_train_csv()
-    X_train, Y_train, X_test, X_local_test, Y_local_test = build_train_and_test(df, df_test, representation, max_interactions, aux_features, padding)
-    save_pickles(X_train, Y_train, X_test, X_local_test, Y_local_test)
+    X_train, X_train_events, Y_train, X_test, X_test_events, X_local_test, X_events_local_test, Y_local_test = build_rep_6(df, df_test, max_interactions, aux_features, padding)
+    save_pickles(X_train, X_train_events, Y_train, X_test, X_test_events, X_local_test, X_events_local_test, Y_local_test)
 
 
 
 X_train = np.array(X_train)
+X_train_events = np.array(X_train_events)
 Y_train = np.array(Y_train)
-X_train, X_val, X_test, Y_train, Y_val = generate_validation_set(X_train, Y_train, X_test)
+X_train, X_val, X_test, Y_train, Y_val = generate_validation_set(X_train, X_train_events, Y_train, X_test, X_test_events)
 
 model_parameters['n_input'] = X_train[0].toarray().shape[1]
 model_parameters['n_output'] = Y_train[0].toarray().shape[1]
@@ -228,30 +247,30 @@ model_parameters['seq_length'] = X_train[0].toarray().shape[0]
 print('num features: ' + str(model_parameters['n_input']))
 print('seq length: ' + str(model_parameters['seq_length']))
 print('num output: ' + str(model_parameters['n_output']))
-ds = DataSet(X_train, Y_train, X_val, Y_val)
+ds = DataSet(X_train, X_train_events, Y_train, X_val, X_val_events, Y_val)
 X_train = []
+X_train_events = []
 Y_train = []
 X_val = []
+X_val_events = []
 Y_val = []
 
 
 #Create tensorflow model
-model = RNN_dynamic(model_parameters)
+model = model_2RNN(model_parameters)
 model.create_model()
 model.train(ds)
-#for rep4 obtain only test samples with interactions
-if (representation == 4) or (representation == 5):
-    indices_interactions = []
-    for i in range(len(X_test)):
-        if np.count_nonzero(X_test[i]) > 0:
-            indices_interactions.append(i)
-    #val_idx, training_idx = indices[:num_val], indices[num_val:]
-    #X_val, X_train = X_train[val_idx], X_train[training_idx]
-    #Y_val, Y_train  = Y_train[val_idx], Y_train[training_idx]
-    pred_test = np.zeros((len(X_test), model_parameters['n_output']))
-    pred_test[indices_interactions] = model.predict(X_test[indices_interactions])
-else:
-    pred_test = model.predict(X_test)
+
+indices_interactions = []
+for i in range(len(X_test)):
+    if np.count_nonzero(X_test[i]) > 0:
+        indices_interactions.append(i)
+#val_idx, training_idx = indices[:num_val], indices[num_val:]
+#X_val, X_train = X_train[val_idx], X_train[training_idx]
+#Y_val, Y_train  = Y_train[val_idx], Y_train[training_idx]
+pred_test = np.zeros((len(X_test), model_parameters['n_output']))
+pred_test[indices_interactions] = model.predict(X_test[indices_interactions], X_test_events[indices_interactions])
+
 
 
 def compute_most_added_products():
@@ -324,67 +343,47 @@ ncodpers_test = df_test['ncodpers']
 f = open(name_submission, 'w')
 f.write('ncodpers,added_products\n')
 
-if (representation == 1) or (representation == 2):
-    for i in range(len(ncodpers_test)):
-        sorted_pred, sorted_prods = zip(*sorted(zip(pred_test[i], target_columns), reverse=True ))  
-        f.write(str(ncodpers_test[i]) + ',')  # python will convert \n to os.linesep
+pred_int = 0
+pred_no_int = 0
+for i in range(len(ncodpers_test)):
+
+    f.write(str(ncodpers_test[i]) + ',')  # python will convert \n to os.linesep
+    
+    #last_values = df[df.ncodpers == ncodpers_test[i]][target_columns].values[-1] #Slow, probably better build a dictionary
+    last_values = dict_last_values[ncodpers_test[i]]
+    
+    #If contains interactions we use the model
+    if (1 in X_test[i]) or (-1 in X_test[i]): #Check
+        pred_int = pred_int + 1
         num_added = 0
+        sorted_pred, sorted_prods = zip(*sorted(zip(pred_test[i], target_columns), reverse=True ))  
         for prob,prod in zip(sorted_pred, sorted_prods):
-            #Check if the product was already added
+            #Check if the product was already added - FIX, now it's different
             idx_prod = target_columns.index(prod)
-            if X_test[i][-1][idx_prod] == 0:
+            if last_values[idx_prod] == 0:
                 f.write(prod + ' ')
                 num_added += 1
                 if num_added == 7:
                     break
-        f.write('\n')
-        if i % 100000 == 0:
-            print(i)
-else:
-
-    pred_int = 0
-    pred_no_int = 0
-    for i in range(len(ncodpers_test)):
-
-        f.write(str(ncodpers_test[i]) + ',')  # python will convert \n to os.linesep
-        
-        #last_values = df[df.ncodpers == ncodpers_test[i]][target_columns].values[-1] #Slow, probably better build a dictionary
-        last_values = dict_last_values[ncodpers_test[i]]
-        
-        #If contains interactions we use the model
-        if (1 in X_test[i]) or (-1 in X_test[i]): #Check
-            pred_int = pred_int + 1
-            num_added = 0
-            sorted_pred, sorted_prods = zip(*sorted(zip(pred_test[i], target_columns), reverse=True ))  
-            for prob,prod in zip(sorted_pred, sorted_prods):
-                #Check if the product was already added - FIX, now it's different
-                idx_prod = target_columns.index(prod)
-                if last_values[idx_prod] == 0:
-                    f.write(prod + ' ')
-                    num_added += 1
-                    if num_added == 7:
-                        break
-                        
-        else: #if there is no interactions, we use the baseline most added products
-            pred_no_int = pred_no_int + 1
-            num_added = 0
-            for prod in sorted_prods_total:
-                #Check if the product was already added - FIX, now it's different
-                idx_prod = target_columns.index(prod)
-                if last_values[idx_prod] == 0:
-                    f.write(prod + ' ')
-                    num_added += 1
-                    if num_added == 7:
-                        break
-        f.write('\n')
-        if i % 100000 == 0:
-            print(i)
-    print('Predictions with interactions: ' + str(pred_int))
-    print('Predictions with no interactions: ' + str(pred_no_int))
+                    
+    else: #if there is no interactions, we use the baseline most added products
+        pred_no_int = pred_no_int + 1
+        num_added = 0
+        for prod in sorted_prods_total:
+            #Check if the product was already added - FIX, now it's different
+            idx_prod = target_columns.index(prod)
+            if last_values[idx_prod] == 0:
+                f.write(prod + ' ')
+                num_added += 1
+                if num_added == 7:
+                    break
+    f.write('\n')
+    if i % 100000 == 0:
+        print(i)
+print('Predictions with interactions: ' + str(pred_int))
+print('Predictions with no interactions: ' + str(pred_no_int))
 
 f.close()  
-
-
 
 
 #Evaluate on local test set   
@@ -414,6 +413,7 @@ def evaluate_sample(predictions, y_true, k):
     return recall_user, true_pos_k, num_pos, map_k
 
 X_local_test = np.array(X_local_test)
+X_events_local_test = np.array(X_events_local_test)
 Y_local_test = np.array(Y_local_test)
 
 recalls_model = []
@@ -425,31 +425,21 @@ for k in ks:
     map_k_users = []
     total_true_pos_k = 0
     total_pos = 0
-    if representation == 2:
-        pred_local_test = model.predict(X_local_test)
-        
-        for i in range(len(pred_local_test)):
-            #sorted_pred, sorted_y = zip(*sorted(zip(pred_local_test[i], X_local_test[i]), reverse=True ))
-            recall_user, true_pos_k, num_pos, map_k = evaluate_sample(pred_local_test[i], Y_local_test[i], k)
-            map_k_users.append(map_k)
-            recall_users.append(recall_user)
-            total_true_pos_k += true_pos_k
-            total_pos += num_pos
-    elif (representation==4) or (representation==5):
-        print('Local test rep 4')
-        pred_local_test = np.zeros((len(X_local_test), model_parameters['n_output']))
-        pred_local_test = model.predict(X_local_test)
-        
-       
-        for i in range(len(X_local_test)):  
-            #sorted_pred, sorted_y = zip(*sorted(zip(pred_local_test[i], Y_local_test[i]), reverse=True )) #TODO: Discard the products that were already part of the portfolio in the last step
-            recall_user, true_pos_k, num_pos, map_k = evaluate_sample(pred_local_test[i], Y_local_test[i], k)
-            map_k_users.append(map_k)
-            recall_users.append(recall_user)
-            total_true_pos_k += true_pos_k
-            total_pos += num_pos
-            if i % 100000 == 0:
-                print(i)
+
+    print('Local test rep 4')
+    pred_local_test = np.zeros((len(X_local_test), model_parameters['n_output']))
+    pred_local_test = model.predict(X_local_test, X_events_local_test)
+    
+   
+    for i in range(len(X_local_test)):  
+        #sorted_pred, sorted_y = zip(*sorted(zip(pred_local_test[i], Y_local_test[i]), reverse=True )) #TODO: Discard the products that were already part of the portfolio in the last step
+        recall_user, true_pos_k, num_pos, map_k = evaluate_sample(pred_local_test[i], Y_local_test[i], k)
+        map_k_users.append(map_k)
+        recall_users.append(recall_user)
+        total_true_pos_k += true_pos_k
+        total_pos += num_pos
+        if i % 100000 == 0:
+            print(i)
 
     print('-------------------')            
     print('Results local test for k = ' + str(k) + ':')
@@ -508,8 +498,6 @@ for k in ks:
 #clf_probs = clf.predict_proba(X_test)
     
 #make plot 
-
-'''
 import matplotlib.pyplot as plt
 
 plt.plot(recalls_model, linestyle='-', marker='o', label='recall_k_model')
@@ -523,5 +511,5 @@ plt.plot(maps_baseline, linestyle='-', marker='o', label='map_k_freq_baseline')
 plt.legend()
 plt.ylim([0,1])
 plt.show()
-'''
+
 

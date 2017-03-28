@@ -474,7 +474,7 @@ def build_rep_4(df, df_test, max_interactions, aux_features, padding):
                     x = np.zeros((max_interactions, interactions.shape[1]))
                     interactions_sample = interactions[:i, :]
                     if len(interactions_sample) > 0:
-                        if len(interactions_sample > max_interactions):
+                        if len(interactions_sample) > max_interactions:
                             interactions_sample = interactions_sample[-max_interactions:, :]
                         if padding.lower() == 'right':
                             x[:len(interactions_sample), : ] = interactions_sample #Padding Right
@@ -601,7 +601,7 @@ def build_rep_5(df, df_test, max_interactions, aux_features, padding):
                     x = np.zeros((max_interactions, interactions.shape[1]))
                     interactions_sample = interactions[:i, :]
                     if len(interactions_sample) > 0:
-                        if len(interactions_sample > max_interactions):
+                        if len(interactions_sample) > max_interactions:
                             interactions_sample = interactions_sample[-max_interactions:, :]
                         if padding.lower() == 'right':
                             x[:len(interactions_sample), : ] = interactions_sample #Padding Right
@@ -690,7 +690,6 @@ def build_rep_5(df, df_test, max_interactions, aux_features, padding):
                 while len(x_test2) < max_interactions:
                     x_test2.append(np.zeros(num_features))
                 x_test2 = np.array(x_test2)
-                break
                 
                 
                 y_test = group[group.fecha_dato == local_test_date][columns_pos_interaction].values.astype(np.int8)            
@@ -715,142 +714,175 @@ def build_rep_5(df, df_test, max_interactions, aux_features, padding):
     return X_train, Y_train, X_test, X_local_test, Y_local_test    
     
     
-    
 '''
-Build representation 5: Only vectors of interactions formed by: Positive interactions(adds) + Negative interactions(drops) + time from last interaction
-Same than representation 4, but we separate interactions in the same timestep
+Build representation 6: Only vectors of interactions formed by: Positive interactions(adds) + Negative interactions(drops) + time from last interaction. Also added events
+Same than representation 4, but we add also a new X for every sample with the events
 '''
-def build_rep_5a(df, df_test, max_interactions, aux_features, padding): 
+def build_rep_6(df, df_test, max_interactions, aux_features, padding): 
 
-    if False:
-        aux_features_length = str(len(aux_features))
-        with open('pickles/X_train_temp.pickle', 'rb') as handle:
-            X_train = pickle.load(handle)
-        with open('pickles/X_test_temp.pickle', 'rb') as handle:
-            X_test = pickle.load(handle)
-        with open('pickles/Y_train_temp.pickle', 'rb') as handle:
-            Y_train = pickle.load(handle)
-        with open('pickles/X_local_test_temp.pickle', 'rb') as handle:
-            X_local_test = pickle.load(handle)
-        with open('pickles/Y_local_test_temp.pickle', 'rb') as handle:
-            Y_local_test = pickle.load(handle)
-        
-    else:
+    event_columns = ['event__changed actividad 0 to 1', 'event__changed actividad 1 to 0', 'event__changed segmento from 01 to 02',
+       'event__changed segmento from 01 to 03',
+       'event__changed segmento from 02 to 01',
+       'event__changed segmento from 02 to 03',
+       'event__changed segmento from 03 to 01',
+       'event__changed segmento from 03 to 02', 'event__fall',
+       'event__moved country', 'event__moved province']
+    with open('pickles/df_events.pickle', 'rb') as handle:
+        df_events = pickle.load(handle)
+    df_events['date'] = pd.to_datetime(df_events['date'])
+    df_events['ncodpers'] = df_events['ncodpers'].astype(np.int32)
 
-        dtype_sparse = np.int8
-        if len(aux_features) > 0:
-            df_aux_features = load_aux_features_df(aux_features)
-            df = df.join(df_aux_features, rsuffix='_r', lsuffix='_l')
-            dtype_sparse = np.float32
-        print('Building representation 4')
-        time_column = 'time_from_last_interaction'
-        X_train = []
-        Y_train = []
-        X_test = []
-        columns_pos_interaction = []
-        columns_neg_interaction = []
-        for prod in target_columns:
-            columns_pos_interaction.append(prod + '_pos_interaction')
-            columns_neg_interaction.append(prod + '_neg_interaction')
-        a = 0
-        ncodpers_test = df_test['ncodpers'].tolist()
-        X_test = np.zeros((len(ncodpers_test), max_interactions, len(columns_pos_interaction) + len(columns_pos_interaction) + 1 + len(aux_features)), dtype=np.int8)
-        local_test_date = df.fecha_dato.max()
-        grouped = df[df.fecha_dato != local_test_date].groupby('ncodpers')
-        for ncodpers,group in grouped:
-        
-            interactions_without_time = group[columns_pos_interaction + columns_neg_interaction].values
-            interactions_with_time = group[columns_pos_interaction + columns_neg_interaction + [time_column] + aux_features]
-            time_column = len(columns_pos_interaction) + len(columns_neg_interaction) 
+    max_events = 5
+    dtype_sparse = np.int8
+    print('Building representation 6')
+    time_column = 'time_from_last_interaction'
+    X_train = []
+    X_train_events = []
+    Y_train = []
+    columns_pos_interaction = []
+    columns_neg_interaction = []
+    for prod in target_columns:
+        columns_pos_interaction.append(prod + '_pos_interaction')
+        columns_neg_interaction.append(prod + '_neg_interaction')
+    a = 0
+    #df_test = load_test_csv()
+    ncodpers_test = df_test['ncodpers'].tolist()
+    X_test = np.zeros((len(ncodpers_test), max_interactions, len(columns_pos_interaction) + len(columns_pos_interaction) + 1 + len(aux_features)), dtype=np.int8)
+    X_test_events = np.zeros((len(ncodpers_test), max_events, len(event_columns) + 1))
+    date_test = df_test['fecha_dato'].max()
+    local_test_date = df.fecha_dato.max()
+    grouped = df[df.fecha_dato != local_test_date].groupby('ncodpers')
+    b_break = False
+    for ncodpers,group in grouped:
+                
+        interactions = group[columns_pos_interaction + columns_neg_interaction + [time_column] + aux_features]
+        #add_interactions = group[columns_pos_interaction + [time_column]]
+        interactions = interactions[group['b_interaction'] == True].values
+        dates_interactions = group[group['b_interaction'] ==  True]['fecha_dato'].values
+        num_interactions = len(interactions)
+        df_events_ncod = df_events[df_events.ncodpers == ncodpers]
+        for i in range(1, num_interactions):
+            y = interactions[i][0:len(columns_pos_interaction)]
+            date_interaction = dates_interactions[i]
+            if 1 in y: #Only add samples with added products
+                x = np.zeros((max_interactions, interactions.shape[1]))
+                interactions_sample = interactions[:i, :]
+                if len(interactions_sample) > 0:
+                    if len(interactions_sample) > max_interactions:
+                        interactions_sample = interactions_sample[-max_interactions:, :]
+                    if padding.lower() == 'right':
+                        x[:len(interactions_sample), : ] = interactions_sample #Padding Right
+                    elif padding.lower() == 'left':
+                        x[-len(interactions_sample):, :] = interactions_sample #Padding Left
+                X_train.append(sparse.csr_matrix(x, dtype=dtype_sparse))
+                Y_train.append(sparse.csr_matrix(y, dtype=dtype_sparse))
+                #Get events 
+                x_events = np.zeros((max_events, len(event_columns) + 1), dtype=np.int8)
+                events = df_events_ncod[df_events_ncod.date < date_interaction]
+                if len(events) > 0:
+                    events['diff_date'] = date_interaction - events['date'] #TODO transform to number of months
+                    events['diff_date'] = events['diff_date']/np.timedelta64(1, 'M')
+                    events['diff_date'] = events['diff_date'].round()
+                    events['diff_date'] = events['diff_date'].astype(np.int8)
+                    events = events[event_columns + ['diff_date']]
+                    events = events.values
+                    if len(events) > max_events:
+                        events = events[-max_events, :]
+                    x_events[:len(events), :] = events
+                X_train_events.append(sparse.csr_matrix(x_events, dtype=dtype_sparse))
+        if ncodpers in ncodpers_test:
+            idx_test = ncodpers_test.index(ncodpers)
+            x_test = np.zeros((max_interactions, interactions.shape[1]))
+            if num_interactions > 0:
+                if len(interactions) > max_interactions:
+                    interactions = interactions[-max_interactions:, :]
+                if padding.lower() == 'right':
+                    x_test[:len(interactions):, :] = interactions #Padding Right
+                elif padding.lower() == 'left':
+                    x_test[-len(interactions):, :] = interactions #Padding Left
+            X_test[idx_test] = x_test
+            #Get events
+            x_events = np.zeros((max_events, len(event_columns) + 1), dtype=np.int8)
+            events = df_events_ncod[df_events_ncod.date < date_test]
+            if len(events) > 0: #Try also when several months
+                events['diff_date'] = date_test - events['date'] #TODO transform to number of months
+                events['diff_date'] = events['diff_date']/np.timedelta64(1, 'M')
+                events['diff_date'] = events['diff_date'].round()
+                events['diff_date'] = events['diff_date'].astype(np.int8)
+                #print(events['diff_date'])
+                events = events[event_columns + ['diff_date']]
+                events = events.values
+                if len(events) > max_events:
+                    events = events[-max_events, :]
+                x_events[:len(events), :] = events
+            X_test_events[idx_test] = x_events
+        if a % 10000 == 0:
+            print(a)
+
+        a = a + 1
+
+
+    #Build local test matrix
+    print('Build local test set matrix')
+    with open('pickles/ncodpers_interactions_local_test.pickle', 'rb') as handle:
+        ncodpers_interactions_local_test = pickle.load(handle)
+    X_local_test = []
+    X_events_local_test = []
+    Y_local_test = []
+    local_test_date = df.fecha_dato.max()
+    grouped = df[df.ncodpers.isin(ncodpers_interactions_local_test)].groupby('ncodpers')
+    i = 0
+    for name,group in grouped:
+        last_date = group.fecha_dato.max()
+        if last_date == local_test_date:
+            interactions = group[group.fecha_dato < local_test_date][columns_pos_interaction + columns_neg_interaction + [time_column] + aux_features]
             #add_interactions = group[columns_pos_interaction + [time_column]]
-            interactions_with_time = interactions_with_time[group['b_interaction'] == True].values
-            num_total_separated_interactions = np.count_nonzero(interactions_without_time)
-            interactions_separated = np.zeros((num_total_separated_interactions, interactions_with_time.shape[1]))
-            num_int = 0
-            for j in len(interactions_without_time):
-                position_interactions = np.where(interactions_without_time[j] == 1)[0]
-                for pos in position_interactions:
-                    interactions_separated[num_int, pos] = 1
-                    interactions_separated[num_int, time_column] = interactions_with_time[j, time_column]
-                    num_int += 1
-                    
-                    
-            #num_interactions = len(interactions)
-            for i in range(1, num_total_separated_interactions):
-                y = interactions[i][0:len(columns_pos_interaction)] 
-                if 1 in y: #Only add samples with added products
-                    x = np.zeros((max_interactions, interactions.shape[1]))
-                    interactions_sample = interactions[:i, :]
-                    if len(interactions_sample) > 0:
-                        if len(interactions_sample > max_interactions):
-                            interactions_sample = interactions_sample[-max_interactions:, :]
-                        if padding.lower() == 'right':
-                            x[:len(interactions_sample), : ] = interactions_sample #Padding Right
-                        elif padding.lower() == 'left':
-                            x[-len(interactions_sample):, :] = interactions_sample #Padding Left
-                    X_train.append(sparse.csr_matrix(x, dtype=dtype_sparse))
-                    Y_train.append(sparse.csr_matrix(y, dtype=dtype_sparse))
-            if ncodpers in ncodpers_test:
-                idx_test = ncodpers_test.index(ncodpers)
-                x_test = np.zeros((max_interactions, interactions.shape[1]))
-                if num_interactions > 0:
-                    if len(interactions) > max_interactions:
-                        interactions = interactions[-max_interactions:, :]
-                    if padding.lower() == 'right':
-                        x_test[:len(interactions):, :] = interactions #Padding Right
-                    elif padding.lower() == 'left':
-                        x_test[-len(interactions):, :] = interactions #Padding Left
-                X_test[idx_test] = x_test
-            if a % 10000 == 0:
-                print(a)
+            interactions = interactions[group['b_interaction'] == True].values
+            num_interactions = len(interactions)
+            x_test = np.zeros((max_interactions, interactions.shape[1]), dtype=np.int8)
+            if num_interactions > 0:
+                if len(interactions) > max_interactions:
+                    interactions = interactions[-max_interactions:, :]
+                if padding.lower() == 'right':
+                    x_test[:len(interactions):, :] = interactions #Padding Right
+                elif padding.lower() == 'left':
+                    x_test[-len(interactions):, :] = interactions #Padding Left
+
+            y_test = group[group.fecha_dato == local_test_date][columns_pos_interaction].values.astype(np.int8)            
+
+            X_local_test.append(x_test)
+            Y_local_test.append(y_test)
+            
+            #Get events 
+            x_events = np.zeros((max_events, len(event_columns) + 1), dtype=np.int8)
+            events = df_events_ncod[df_events_ncod.date < local_test_date]
+            if len(events) > 0:
+                events['diff_date'] = local_test_date - events['date'] #TODO transform to number of months
+                events['diff_date'] = events['diff_date']/np.timedelta64(1, 'M')
+                events['diff_date'] = events['diff_date'].round()
+                events['diff_date'] = events['diff_date'].astype(np.int8)
+                events = events[event_columns + ['diff_date']]
+                events = events.values  
+                if len(events) > max_events:
+                    events = events[-max_events, :]
+                x_events[:len(events), :] = events
+            X_events_local_test.append(x_events)
+        i = i + 1
+        if i % 10000 == 0:
+            print(i)
                 
-            a = a + 1
-            
-            
-        #Build local test matrix
-        print('Build local test set matrix')
-        with open('pickles/ncodpers_interactions_local_test.pickle', 'rb') as handle:
-            ncodpers_interactions_local_test = pickle.load(handle)
-        X_local_test = []
-        Y_local_test = []
-        local_test_date = df.fecha_dato.max()
-        grouped = df[df.ncodpers.isin(ncodpers_interactions_local_test)].groupby('ncodpers')
-        i = 0
-        for name,group in grouped:
-            last_date = group.fecha_dato.max()
-            if last_date == local_test_date:
-                interactions = group[group.fecha_dato < local_test_date][columns_pos_interaction + columns_neg_interaction + [time_column] + aux_features]
-                #add_interactions = group[columns_pos_interaction + [time_column]]
-                interactions = interactions[group['b_interaction'] == True].values
-                num_interactions = len(interactions)
-                x_test = np.zeros((max_interactions, interactions.shape[1]), dtype=np.int8)
-                if num_interactions > 0:
-                    if len(interactions) > max_interactions:
-                        interactions = interactions[-max_interactions:, :]
-                    if padding.lower() == 'right':
-                        x_test[:len(interactions):, :] = interactions #Padding Right
-                    elif padding.lower() == 'left':
-                        x_test[-len(interactions):, :] = interactions #Padding Left
-                
-                y_test = group[group.fecha_dato == local_test_date][columns_pos_interaction].values.astype(np.int8)            
-                    
-                X_local_test.append(x_test)
-                Y_local_test.append(y_test)
-            i = i + 1
-            if i % 10000 == 0:
-                print(i)
-            
-        with open('pickles/X_train_temp.pickle', 'wb') as handle:
-            pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        with open('pickles/Y_train_temp.pickle', 'wb') as handle:
-            pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        with open('pickles/X_test_temp.pickle', 'wb') as handle:
-            pickle.dump(X_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        with open('pickles/X_local_test_temp.pickle', 'wb') as handle:
-            pickle.dump(X_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        with open('pickles/Y_local_test_temp.pickle', 'wb') as handle:
-            pickle.dump(Y_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)    
+            with open('pickles/X_train_temp.pickle', 'wb') as handle:
+                pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open('pickles/Y_train_temp.pickle', 'wb') as handle:
+                pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open('pickles/X_test_temp.pickle', 'wb') as handle:
+                pickle.dump(X_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open('pickles/X_local_test_temp.pickle', 'wb') as handle:
+                pickle.dump(X_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open('pickles/Y_local_test_temp.pickle', 'wb') as handle:
+                pickle.dump(Y_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)    
     
-    return X_train, Y_train, X_test, X_local_test, Y_local_test
+    return X_train, X_train_events, Y_train, X_test, X_test_events, X_local_test, X_events_local_test, Y_local_test    
+
     
  
