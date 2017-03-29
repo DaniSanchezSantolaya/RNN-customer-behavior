@@ -1,3 +1,13 @@
+# 29 March - 05 April
+
+Evaluate the model without data augmentation
+  - Training and test evaluation, and check if it is overfitting or underfitting
+  - compare with the case of data augmentation 
+  
+Research which features the model is learning (tsne)
+
+Try Attentional mechanism
+
 # 22 March - 29 March
 
 Experiment with the approach of different timescales
