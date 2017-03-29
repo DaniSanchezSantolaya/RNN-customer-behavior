@@ -8,6 +8,8 @@ Review if Phased LSTM can be used
 
 Think new ways for evaluation
 
+https://docs.google.com/presentation/d/1QdqOHdHIHp7mnlt6hfxfKTSE2N85xi-0CmZRZfPKhnA/edit?usp=sharing
+
 # 15 March - 22 March
 
 Think what to do different so the work incorporates some novelty
