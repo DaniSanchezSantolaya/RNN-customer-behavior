@@ -4,6 +4,7 @@ import numpy as np
 import os
 #from PhasedLSTMCell_v1 import *
 from PhasedLSTMCell import *
+import time
 
 
 def _seq_length(sequence):
@@ -169,78 +170,121 @@ class RNN_dynamic:
     def train(self, ds):
     
         #Optimize
-        display_step = 100
-        checkpoint_freq_step = 100
+        display_step = 10
+        checkpoint_freq_step = 20
         #max_steps = 30000000
         #max_steps = 600000
         # Create a saver.
         saver = tf.train.Saver()
-        checkpoint_dir = './checkpoints'
-        parameters_str = str(self.parameters['rnn_type']) + '-' + str(self.parameters['n_hidden']) + '-' + str(self.parameters['rnn_layers']) + '-' + str(self.parameters['batch_size']) + '-' + str(self.parameters['opt']) + '-' + str(self.parameters['max_steps'])
+        self.parameters_str = str('rep' + str(ds._representation) + '-' + self.parameters['rnn_type']) + '-' + str(self.parameters['n_hidden']) + '-' + str(self.parameters['rnn_layers']) + '-' + str(self.parameters['batch_size']) + '-' + str(self.parameters['opt']) + '-' + str(self.parameters['max_steps'])
+        self.parameters_str += '-' + time.strftime("%Y%m%d-%H%M%S")
+        checkpoint_dir = './checkpoints/' + self.parameters_str
+        if not tf.gfile.Exists(checkpoint_dir):
+            tf.gfile.MakeDirs(checkpoint_dir)
+            tf.gfile.MakeDirs(checkpoint_dir + '/best_model')
+            tf.gfile.MakeDirs(checkpoint_dir + '/last_model')
         self.best_loss = 150000000
         # Launch the graph
         with tf.Session() as sess:
             merged = tf.summary.merge_all()
-            test_writer = tf.summary.FileWriter('tensorboard/Santander/' + str(parameters_str), sess.graph)
+            train_writer = tf.summary.FileWriter('tensorboard/Santander/' + str(self.parameters_str) + '/train', sess.graph)
+            train_last_month_writer = tf.summary.FileWriter('tensorboard/Santander/' + str(self.parameters_str) + '/train_last_month', sess.graph)
+            val_writer = tf.summary.FileWriter('tensorboard/Santander/' + str(self.parameters_str) + '/val', sess.graph)
+            test_writer = tf.summary.FileWriter('tensorboard/Santander/' + str(self.parameters_str) + '/test', sess.graph)
             sess.run(self.init)
 
             step = 1
+            
             # Keep training until reach max iterations
             while step * self.parameters['batch_size'] < self.parameters['max_steps']:
-            #while ds._epochs_completed < 10:
-                batch_x, batch_y = ds.next_batch(self.parameters['batch_size'])
-                # Run optimization op (backprop)
+                total_iterations = step * self.parameters['batch_size']
                 
+                #print('step: ' + str(step))
+                #print('max steps: ' + str(self.parameters['max_steps']))
+                #print('a: ' + str((total_iterations + step * self.parameters['batch_size'])))
+                
+                #Obtain batch for this iteration
+                batch_x, batch_y = ds.next_batch(self.parameters['batch_size'])
+                
+                # Run optimization op (backprop)
                 sess.run(self.optimizer, feed_dict={self.x: batch_x, self.y: batch_y})
                 _, c = sess.run([self.optimizer, self.loss],
                                              feed_dict={self.x: batch_x, self.y: batch_y})
                 
-                if step % display_step == 0:
+                if (step % display_step == 0) or ((total_iterations + self.parameters['batch_size'])  >= (self.parameters['max_steps'] - 1)):
+                    print('------------------------------------------------')
                     # Calculate batch loss
-                    loss = sess.run(self.loss, feed_dict={self.x: batch_x, self.y: batch_y})
-                    print("Iter " + str(step*self.parameters['batch_size']) + ", Minibatch train Loss= " + 
-                          "{:.6f}".format(loss))
+                    train_minibatch_loss, summary = sess.run([self.loss, merged], feed_dict={self.x: batch_x, self.y: batch_y})
+                    print("Iter " + str(total_iterations) + ", Minibatch train Loss= " + 
+                          "{:.6f}".format(train_minibatch_loss))
+                    train_writer.add_summary(summary, total_iterations)
+                    # Calculate training loss at last month
+                    train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month})
+                    print("Iter " + str(total_iterations) + ", Last month train Loss= " + 
+                          "{:.6f}".format(train_last_month_loss) + ", Last month train Accuracy= " + 
+                          "{:.6f}".format(train_last_month_accuracy) + ", Last train Map= " + 
+                          "{:.6f}".format(train_last_month_map))
+                    train_last_month_writer.add_summary(summary, total_iterations)
                     # Calculate val loss
                     self.val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_val, self.y:ds._Y_val})
-                    test_writer.add_summary(summary, step)
-                    print('Val loss: ' + str(self.val_loss) + ', Val accuracy: ' + str(val_acc) + ', Val MAP: ' + str(val_map))
+                    val_writer.add_summary(summary, total_iterations)
+                    print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
+                          "{:.6f}".format(self.val_loss) + ", Validation  Accuracy= " + 
+                          "{:.6f}".format(val_acc) + ", Validation Map= " + 
+                          "{:.6f}".format(val_map))
+                    # Calculate test loss
+                    self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test})
+                    test_writer.add_summary(summary, total_iterations)
+                    print("Iter " + str(total_iterations) + ", Test Loss= " + 
+                          "{:.6f}".format(self.test_loss) + ", Test Accuracy= " + 
+                          "{:.6f}".format(test_acc) + ", Test Map= " + 
+                          "{:.6f}".format(test_map))
+
+                    
+                    #If best loss save the model as best model so far
                     if self.val_loss < self.best_loss:
                         self.best_loss = self.val_loss
-                        checkpoint_path = os.path.join(checkpoint_dir, 'model_best.ckpt')
-                        saver.save(sess, checkpoint_path, global_step=step)
-                        #TODO save best path to load it later
-                        self.best_model_path = 'model_best.ckpt-' + str(step)
+                        checkpoint_dir_tmp = checkpoint_dir + '/best_model/'
+                        checkpoint_path = os.path.join(checkpoint_dir_tmp, 'model_best.ckpt')
+                        saver.save(sess, checkpoint_path, global_step=total_iterations)
+                        self.best_model_path = 'model_best.ckpt-' + str(total_iterations)
                         #print('-->save best model: ' + str(checkpoint_path) + ' - step: ' + str(step) + ' best_model_path: ' + str(self.best_model_path))
+                    print('------------------------------------------------')
                     
-                if (step % checkpoint_freq_step == 0) or (step == self.parameters['max_steps'] - 1):
-                    checkpoint_path = os.path.join(checkpoint_dir, 'model_last.ckpt')
-                    saver.save(sess, checkpoint_path, global_step=step)
-                    self.last_model_path = 'model_last.ckpt-' + str(step)
+                    
+                #Save check points periodically or in last iteration
+                if (step % checkpoint_freq_step == 0) or ( (total_iterations + self.parameters['batch_size'])  >= (self.parameters['max_steps'] - 1)):
+                    checkpoint_dir_tmp =  checkpoint_dir + '/last_model/'
+                    checkpoint_path = os.path.join(checkpoint_dir_tmp, 'last_model.ckpt')
+                    saver.save(sess, checkpoint_path, global_step=total_iterations)
+                    self.last_model_path = 'last_model.ckpt-' + str(total_iterations)
                     #print('-->save checkpoint model: ' + str(checkpoint_path) + ' - step: ' + str(step) + ' last_model_path: ' + str(self.last_model_path))
                     
                 step += 1
             print("Optimization Finished!")
             
             
-            pred_val = sess.run(self.pred_prob, feed_dict={self.x: ds._X_val})
+            #pred_val = sess.run(self.pred_prob, feed_dict={self.x: ds._X_val})
             # Calculate val loss
-            self.val_loss, val_acc, val_map = sess.run([self.loss, self.accuracy, self.MAP], feed_dict={self.x: ds._X_val, self.y: ds._Y_val})
-            print('Final validation loss: ' + str(self.val_loss) + ', Validation accuracy: ' + str(val_acc) + ', Validation MAP: ' + str(val_map))
+            #self.val_loss, val_acc, val_map = sess.run([self.loss, self.accuracy, self.MAP], feed_dict={self.x: ds._X_val, self.y: ds._Y_val})
+            #print('Final validation loss: ' + str(self.val_loss) + ', Validation accuracy: ' + str(val_acc) + ', Validation MAP: ' + str(val_map))
             
     def predict(self, X_test):
         #Make predictions for test set with the best model
-        checkpoint_dir = './checkpoints'
+        checkpoint_dir = './checkpoints/' + self.parameters_str
         saver = tf.train.Saver()
 
-        ''' FIX: is removing the best model sometines
+        #CHECK: is removing the best model sometimes
         if self.best_loss < self.val_loss:
-            checkpoint_path = os.path.join(checkpoint_dir, self.best_model_path)
-            print('load best model: ' + str(checkpoint_path))
+            checkpoint_dir_tmp =  checkpoint_dir + '/best_model/'
+            checkpoint_path = os.path.join(checkpoint_dir_tmp, self.best_model_path)
         else:
-            checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
-            print('load last model' + str(checkpoint_path))
-        '''
-        checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
+            checkpoint_dir_tmp =  checkpoint_dir + '/last_model/'
+            checkpoint_path = os.path.join(checkpoint_dir_tmp, self.last_model_path)
+
+
+        
+        #checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
         with tf.Session() as sess:
             saver.restore(sess, checkpoint_path)
             
@@ -278,14 +322,15 @@ class RNN_dynamic:
         checkpoint_dir = './checkpoints'
         saver = tf.train.Saver()
 
-        ''' FIX: is removing the best model sometines
+        #CHECK: is removing the best model sometines
         if self.best_loss < self.val_loss:
             checkpoint_path = os.path.join(checkpoint_dir, self.best_model_path)
             print('load best model: ' + str(checkpoint_path))
         else:
             checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
             print('load last model' + str(checkpoint_path))
-        '''
+        
+        
         checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
         with tf.Session() as sess:
             saver.restore(sess, checkpoint_path)
