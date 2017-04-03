@@ -1,14 +1,14 @@
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
+#import seaborn as sns
+#import matplotlib.pyplot as plt
 import random
 import pickle
 import os
 from preprocess_santander import * 
 from dataset import *
 #from rnn_static import *
-from rnn_dynamic import *
+from rnn_attentional import *
 import tensorflow as tf
 from tensorflow.contrib import rnn
 import sys
@@ -21,12 +21,12 @@ random.seed(17)
 np.random.seed(17)
 
 
-#python experiment.py representation max_interactions padding b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle ks time_column
+#python experiment.py representation max_interactions padding b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle ks time_column embedding_size attentional_layer
 #python experiment.py 4 10 right False 0.2 adam 0.0001 64 128 lstm 1 0.1 0.0 sigmoid 40000 True [2,3,4,5,6,7] num_month
 #python experiment.py 4 5 left True 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7] num_month
 #python experiment.py 4 5 left False 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7] time_from_last_interaction
 #python experiment.py 4 6 right True 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 1000000 True [2,3,4,5,6,7] time_from_last_interaction
-#python experiment.py 5 5 right False 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 10000 True [2,3,4,5,6,7] time_from_last_interaction
+#python experiment_attentional.py 5 10 right True 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 10000 True [2,3,4,5,6,7] time_from_last_interaction 16 embedding
 
 start = time.time()
 
@@ -83,6 +83,8 @@ if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 
     model_parameters['type_output'] = 'sigmoid'
     model_parameters['max_steps'] = 30000
     model_parameters['padding'] = padding
+    model_parameters['embedding_size'] = 16
+    model_parameters['attentional_layer'] = 'embedding'
 
     load_df_pickle = True
     k = 7
@@ -111,6 +113,8 @@ else:
     model_parameters['type_output'] = sys.argv[14]
     model_parameters['max_steps'] = int(sys.argv[15])
     model_parameters['padding'] = padding
+    model_parameters['embedding_size'] = int(sys.argv[19])
+    model_parameters['attentional_layer'] = str(sys.argv[20])
 
     load_df_pickle = sys.argv[16]
     ks =  ast.literal_eval(sys.argv[17])
@@ -118,7 +122,7 @@ else:
 
 
 
-name_submission = 'kaggle_submissions/rep_' +str(representation) + '-interactions_' + str(max_interactions) + '-padding_' + str(padding) + '-' + model_parameters['opt'] + '-lrate_' + str(model_parameters['learning_rate']) + '-hidden_' + str(model_parameters['n_hidden']) + '-bSize_' + str(model_parameters['batch_size']) + '-' + model_parameters['rnn_type'] + '-rnn_layers' + str(model_parameters['rnn_layers']) + '-dropout_' + str(model_parameters['dropout']) + '-L2_' + str(model_parameters['l2_reg']) + '-typeoutput_' + str(model_parameters['type_output']) + '-max_steps_' + str(model_parameters['max_steps']) 
+name_submission = 'kaggle_submissions/rep_' +str(representation) + '-interactions_' + str(max_interactions) + '-padding_' + str(padding) + '-' + model_parameters['opt'] + '-lrate_' + str(model_parameters['learning_rate']) + '-hidden_' + str(model_parameters['n_hidden']) + '-bSize_' + str(model_parameters['batch_size']) + '-' + model_parameters['rnn_type'] + '-rnn_layers' + str(model_parameters['rnn_layers']) + '-dropout_' + str(model_parameters['dropout']) + '-L2_' + str(model_parameters['l2_reg']) + '-typeoutput_' + str(model_parameters['type_output']) + '-max_steps_' + str(model_parameters['max_steps']) + '-embedding_size_' + str(model_parameters['embedding_size']) + '-attentional_layer' + str(model_parameters['attentional_layer']) 
 if len(aux_features) > 0:
     name_submission = name_submission + '_aux_features.csv'
 else:
@@ -141,6 +145,8 @@ print('l2_reg: ' + str(model_parameters['l2_reg']))
 print('type_output: ' + str(model_parameters['type_output']))
 print('max_steps: ' + str(model_parameters['max_steps']))
 print('load_df_pickle: ' + str(load_df_pickle))
+print('embedding_size: ' + str(model_parameters['embedding_size']))
+print('attentional_layer: ' + str(model_parameters['attentional_layer']))
 
 
 #### Load pickle

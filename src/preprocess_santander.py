@@ -4,6 +4,7 @@ import random
 import pickle
 import os
 from scipy import sparse
+import sys
 
 random.seed(17)
 np.random.seed(17)
@@ -564,8 +565,9 @@ def build_rep_4(df, df_test, max_interactions, aux_features, padding, time_colum
                             Y_local_test.append(sparse.csr_matrix(y, dtype=dtype_sparse))
 
             a = a + 1
-            if a % 1000 == 0:
+            if a % 10000 == 0:
                 print(a)
+                sys.stdout.flush()
                  
             
         with open('pickles/X_train_temp.pickle', 'wb') as handle:
@@ -776,8 +778,9 @@ def build_rep_5(df, df_test, max_interactions, aux_features, padding, time_colum
                             
 
             a = a + 1
-            if a % 1000 == 0:
+            if a % 10000 == 0:
                 print(a)
+                sys.stdout.flush()
                 
         
        
@@ -1080,8 +1083,9 @@ def build_rep_7(df, df_test, max_interactions, aux_features, padding, time_colum
                             Y_local_test.append(sparse.csr_matrix(y, dtype=dtype_sparse))
 
             a = a + 1
-            if a % 1000 == 0:
+            if a % 10000 == 0:
                 print(a)
+                sys.stdout.flush()
             
     return X_train, Y_train, X_test, X_local_test, Y_local_test, X_train, Y_train
  
@@ -1242,8 +1246,9 @@ def build_rep_8(df, df_test, max_interactions, aux_features, padding, time_colum
                             
 
             a = a + 1
-            if a % 1000 == 0:
+            if a % 10000 == 0:
                 print(a)
+                sys.stdout.flush()
             
         with open('pickles/X_train_temp.pickle', 'wb') as handle:
             pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)

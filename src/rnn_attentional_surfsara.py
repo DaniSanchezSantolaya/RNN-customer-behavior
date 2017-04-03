@@ -3,9 +3,8 @@ import tensorflow as tf
 import numpy as np
 import os
 #from PhasedLSTMCell_v1 import *
-from PhasedLSTMCell import *
+#from PhasedLSTMCell import *
 import time
-import sys
 
 
 def _seq_length(sequence):
@@ -28,8 +27,15 @@ def _last_relevant(output, length):
     
 class RNN_dynamic:
 
-    def __init__(self, parameters):
+    
 
+    def __init__(self, parameters):
+        #self.attentional_layer = 'hidden_state'
+        #self.attentional_layer = 'input'
+        #self.attentional_layer = 'embedding' #TODO: Try embedding lookup tensorflow and MLP
+        #self.attentional_layer = 'embedding_lookup'
+        #self.embedding_size = 32
+        
         self.parameters = parameters
         
     def create_model(self):
@@ -41,22 +47,33 @@ class RNN_dynamic:
 
         # Define weights
         weights = {
-            'out': tf.Variable(tf.random_normal([self.parameters['n_hidden'], self.parameters['n_output']]))
+            'alphas': tf.Variable(tf.random_normal([self.parameters['n_hidden'], 1]))
         }
+        
+        if self.parameters['attentional_layer'] == 'hidden_state':
+            weights['out'] = tf.Variable(tf.random_normal([self.parameters['n_hidden'], self.parameters['n_output']]))
+        elif self.parameters['attentional_layer'] == 'input':
+            weights['out'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['n_output']]))
+        elif self.parameters['attentional_layer'] == 'embedding':
+            weights['out'] = tf.Variable(tf.random_normal([self.parameters['embedding_size'], self.parameters['n_output']]))
+            weights['emb']   = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']]))
+            
         biases = {
-            'out': tf.Variable(tf.random_normal([self.parameters['n_output']]))
+            'out': tf.Variable(tf.random_normal([self.parameters['n_output']])),
+            'alphas': tf.Variable(tf.random_normal([1]))
+            #'alphas': tf.Variable(tf.random_normal([self.parameters['seq_length']]))
         }
 
 
         # Define a lstm cell with tensorflow
         if self.parameters['rnn_type'].lower() == 'lstm':
-            rnn_cell = tf.nn.rnn_cell.BasicLSTMCell(self.parameters['n_hidden'], forget_bias=1.0)
+            rnn_cell = tf.contrib.rnn.BasicLSTMCell(self.parameters['n_hidden'], forget_bias=1.0)
         elif self.parameters['rnn_type'].lower() == 'gru':
-            rnn_cell = tf.nn.rnn_cell.GRUCell(self.parameters['n_hidden'])
+            rnn_cell = tf.contrib.rnn.GRUCell(self.parameters['n_hidden'])
         elif self.parameters['rnn_type'] == 'lstm2':
-            rnn_cell = tf.nn.rnn_cell.LSTMCell(self.parameters['n_hidden'])
+            rnn_cell = tf.contrib.rnn.LSTMCell(self.parameters['n_hidden'])
         elif self.parameters['rnn_type'] == 'rnn':
-            rnn_cell = tf.nn.rnn_cell.BasicRNNCell(self.parameters['n_hidden'])
+            rnn_cell = tf.contrib.rnn.BasicRNNCell(self.parameters['n_hidden'])
         elif self.parameters['rnn_type'] == 'plstm':
             rnn_cell = PhasedLSTMCell(self.parameters['n_hidden'], use_peepholes=True, state_is_tuple=True)
 
@@ -64,37 +81,93 @@ class RNN_dynamic:
         #Add dropout
         if self.parameters['dropout'] > 0:
             keep_prob = 1 - self.parameters['dropout']
-            rnn_cell = tf.nn.rnn_cell.DropoutWrapper(rnn_cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
+            rnn_cell = tf.contrib.rnn.DropoutWrapper(rnn_cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
             
             
         if self.parameters['rnn_layers'] > 1:
-            rnn_cell = tf.nn.rnn_cell.MultiRNNCell([rnn_cell] * self.parameters['rnn_layers'])  
+            rnn_cell = tf.contrib.rnn.MultiRNNCell([rnn_cell] * self.parameters['rnn_layers'])  
             
-            
-        outputs, states = tf.nn.dynamic_rnn(
-            rnn_cell,
-            self.x,
-            dtype=tf.float32,
-            sequence_length=_seq_length(self.x)
-        )
+        if self.parameters['attentional_layer'] == 'embedding':   
+            self.x_reshaped = tf.reshape(self.x, [-1, int(self.x.get_shape()[2])])
+            v = tf.matmul(self.x_reshaped, weights['emb'])
+            v_reshaped = tf.reshape(v, [-1, self.parameters['seq_length'], self.parameters['embedding_size']])
+            outputs, states = tf.nn.dynamic_rnn(
+                rnn_cell,
+                v_reshaped,
+                dtype=tf.float32,
+                sequence_length=_seq_length(v_reshaped)
+            )
+        else:
+            outputs, states = tf.nn.dynamic_rnn(
+                rnn_cell,
+                self.x,
+                dtype=tf.float32,
+                sequence_length=_seq_length(self.x)
+            )
 
-        #Obtaining the correct output state
-        if self.parameters['padding'].lower() == 'right': #If padding zeros is at right, we need to get the right output, since the last is not validation
-            self.last_relevant_output = _last_relevant(outputs, _seq_length(self.x))
-        elif self.parameters['padding'].lower() == 'left':
-            self.last_relevant_output = outputs[:,-1,:]
+
         
+        self.outputs = outputs
+        self.weights = weights
+        self.biases = biases
+        #Obtain ej
+        batch_shape = outputs.get_shape()[0]
+        batch_per_seq_length_shape = batch_shape * outputs.get_shape()[1]
+        self.outputs_reshaped = tf.reshape(outputs, [-1, int(outputs.get_shape()[2])])
+        print('--------------------')
+        print('weights out:')
+        print(weights['out'].get_shape())
+        print('outputs:')
+        print(outputs.get_shape())
+        print('weights alphas:')
+        print(weights['alphas'].get_shape())
+        print('self.outputs_reshaped:')
+        print(self.outputs_reshaped.get_shape())
+        print('biases[alphas]:')
+        print(biases['alphas'].get_shape())
+        print('--------------------')
+        self.ejs = tf.matmul(self.outputs_reshaped, weights['alphas']) + biases['alphas'] #Check
+        print('self.ejs:')
+        print(self.ejs.get_shape())
+        
+        
+        #Obtain attention weights alphas
+        self.ejs_reshaped = tf.reshape(self.ejs, [-1, int(outputs.get_shape()[1])])
+        self.alphas = tf.nn.softmax(self.ejs_reshaped) 
+        self.reshaped_alphas = tf.reshape(self.alphas, [-1, 1])
+        
+        #Obtain context vector c
+        if self.parameters['attentional_layer'] == 'hidden_state':
+            self.context = self.reshaped_alphas * self.outputs_reshaped #TODO: Try also to multiply with input (or embedding as they do in the paper)
+        elif self.parameters['attentional_layer'] == 'input':
+            self.x_reshaped = tf.reshape(self.x, [-1, int(self.x.get_shape()[2])])
+            self.context = self.reshaped_alphas * self.x_reshaped
+        elif self.parameters['attentional_layer'] == 'embedding':
+            self.context = self.reshaped_alphas * v
+        self.context_reshaped = tf.reshape(self.context, [-1, self.parameters['seq_length'], int(self.context.get_shape()[1])])
+        self.context_reduced = tf.reduce_sum(self.context_reshaped, axis= 1)
+        
+        
+        #Obtaining the correct output state
+        #if self.parameters['padding'].lower() == 'right': #If padding zeros is at right, we need to get the right output, since the last is not validation
+            #self.last_relevant_output = _last_relevant(outputs, _seq_length(self.x))
+        #elif self.parameters['padding'].lower() == 'left':
+            #self.last_relevant_output = outputs[:,-1,:]
+        #logits = tf.matmul(self.last_relevant_output, weights['out']) + biases['out']
+        
+        logits = tf.matmul(self.context_reduced, weights['out']) + biases['out']
 
-        logits = tf.matmul(self.last_relevant_output, weights['out']) + biases['out']
+
+        
         #self._debug = logits
         #self._debug = outputs
 
         if self.parameters['type_output'].lower() == 'sigmoid':
             self.pred_prob = tf.sigmoid(logits)
-            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits, self.y))
+            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=self.y))
         else:
             self.pred_prob = tf.nn.softmax(logits)
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, self.y))
+            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self.y))
 
         #Add L2 regularizatoin loss
         self.loss = self.loss + self.parameters['l2_reg'] * tf.nn.l2_loss(weights['out'])
@@ -176,8 +249,7 @@ class RNN_dynamic:
         #max_steps = 30000000
         #max_steps = 600000
         # Create a saver.
-        saver_last = tf.train.Saver()
-        saver_best = tf.train.Saver()
+        saver = tf.train.Saver()
         self.parameters_str = str('rep' + str(ds._representation) + '-' + self.parameters['rnn_type']) + '-' + str(self.parameters['n_hidden']) + '-' + str(self.parameters['rnn_layers']) + '-' + str(self.parameters['batch_size']) + '-' + str(self.parameters['opt']) + '-' + str(self.parameters['max_steps'])
         self.parameters_str += '-' + time.strftime("%Y%m%d-%H%M%S")
         checkpoint_dir = './checkpoints/' + self.parameters_str
@@ -201,12 +273,60 @@ class RNN_dynamic:
             while step * self.parameters['batch_size'] < self.parameters['max_steps']:
                 total_iterations = step * self.parameters['batch_size']
                 
-                #print('step: ' + str(step))
-                #print('max steps: ' + str(self.parameters['max_steps']))
-                #print('a: ' + str((total_iterations + step * self.parameters['batch_size'])))
-                
                 #Obtain batch for this iteration
                 batch_x, batch_y = ds.next_batch(self.parameters['batch_size'])
+                '''
+                print('Start')
+                outputs, weights, biases = sess.run([self.outputs, self.weights, self.biases], feed_dict={self.x: batch_x, self.y: batch_y})
+                print(outputs)
+                print(weights['alphas'].shape)
+                #print(weights)
+                #print(biases)
+                
+                outputs_reshaped = sess.run([self.outputs_reshaped], feed_dict={self.x: batch_x, self.y: batch_y})
+                print('weights[alphas]: ' + str(weights['alphas'][0].shape))
+                print(weights['alphas'])
+                
+                outputs_reshaped = sess.run([self.outputs_reshaped], feed_dict={self.x: batch_x, self.y: batch_y})
+                print('outputs_reshaped: ' + str(outputs_reshaped[0].shape))
+                print(outputs_reshaped)
+                
+                
+                ejs = sess.run([self.ejs], feed_dict={self.x: batch_x, self.y: batch_y})
+                print('ejs: ' + str(ejs[0].shape))
+                print(ejs)
+                
+                
+                
+                ejs_reshaped = sess.run([self.ejs_reshaped], feed_dict={self.x: batch_x, self.y: batch_y})
+                print('ejs_reshaped: '  + str(ejs_reshaped[0].shape))
+                print(ejs_reshaped)
+                
+                
+                alphas = sess.run([self.alphas], feed_dict={self.x: batch_x, self.y: batch_y})
+                print('alphas: '  + str(alphas[0].shape))
+                print(alphas)
+                
+                reshaped_alphas = sess.run([self.reshaped_alphas], feed_dict={self.x: batch_x, self.y: batch_y})
+                print('reshaped_alphas: '  + str(reshaped_alphas[0].shape))
+                print(reshaped_alphas)
+                
+                
+                context = sess.run([self.context], feed_dict={self.x: batch_x, self.y: batch_y})
+                print('context: ' + str(context[0].shape))
+                print(context)
+                
+                
+                context_reshaped = sess.run([self.context_reshaped], feed_dict={self.x: batch_x, self.y: batch_y})
+                print('context_reshaped: ' + str(context_reshaped[0].shape))
+                print(context_reshaped)
+                
+                context_reduced = sess.run([self.context_reduced], feed_dict={self.x: batch_x, self.y: batch_y})
+                print('context_reduced: ' + str(context_reduced[0].shape))
+                print(context_reduced)
+                break
+                '''
+
                 
                 # Run optimization op (backprop)
                 sess.run(self.optimizer, feed_dict={self.x: batch_x, self.y: batch_y})
@@ -248,17 +368,17 @@ class RNN_dynamic:
                         self.best_loss = self.val_loss
                         checkpoint_dir_tmp = checkpoint_dir + '/best_model/'
                         checkpoint_path = os.path.join(checkpoint_dir_tmp, 'model_best.ckpt')
-                        saver_best.save(sess, checkpoint_path, global_step=total_iterations)
+                        saver.save(sess, checkpoint_path, global_step=total_iterations)
                         self.best_model_path = 'model_best.ckpt-' + str(total_iterations)
                         #print('-->save best model: ' + str(checkpoint_path) + ' - step: ' + str(step) + ' best_model_path: ' + str(self.best_model_path))
                     print('------------------------------------------------')
-                    sys.stdout.flush()
+                    
                     
                 #Save check points periodically or in last iteration
                 if (step % checkpoint_freq_step == 0) or ( (total_iterations + self.parameters['batch_size'])  >= (self.parameters['max_steps'] - 1)):
                     checkpoint_dir_tmp =  checkpoint_dir + '/last_model/'
                     checkpoint_path = os.path.join(checkpoint_dir_tmp, 'last_model.ckpt')
-                    saver_last.save(sess, checkpoint_path, global_step=total_iterations)
+                    saver.save(sess, checkpoint_path, global_step=total_iterations)
                     self.last_model_path = 'last_model.ckpt-' + str(total_iterations)
                     #print('-->save checkpoint model: ' + str(checkpoint_path) + ' - step: ' + str(step) + ' last_model_path: ' + str(self.last_model_path))
                     
@@ -288,7 +408,6 @@ class RNN_dynamic:
         
         #checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
         with tf.Session() as sess:
-            print('load model: ' + str(checkpoint_path))
             saver.restore(sess, checkpoint_path)
             
 
