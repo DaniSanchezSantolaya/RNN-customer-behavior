@@ -56,7 +56,7 @@ class RNN_dynamic:
             weights['out'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['n_output']]))
         elif self.parameters['attentional_layer'] == 'embedding':
             weights['out'] = tf.Variable(tf.random_normal([self.parameters['embedding_size'], self.parameters['n_output']]))
-            weights['emb']   = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']))
+            weights['emb'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']]))
             
         biases = {
             'out': tf.Variable(tf.random_normal([self.parameters['n_output']])),
