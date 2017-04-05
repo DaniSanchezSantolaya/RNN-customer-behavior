@@ -8,6 +8,8 @@ Research which features the model is learning (tsne)
 
 Try Attentional mechanism
 
+https://docs.google.com/presentation/d/1GTz8JBdsPIRtHY1shBOd5mkD82CcAhsngIn4jplR_WY/edit?usp=sharing
+
 # 22 March - 29 March
 
 Experiment with the approach of different timescales
