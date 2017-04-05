@@ -1,3 +1,9 @@
+# 05 March - 12 April
+
+Get another data set (synthetic or real). Eg Movilens. 
+
+Try to add more complexity on the model
+
 # 29 March - 05 April
 
 Evaluate the model without data augmentation
