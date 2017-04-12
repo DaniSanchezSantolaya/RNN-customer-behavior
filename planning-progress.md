@@ -4,6 +4,8 @@ Get another data set (synthetic or real). Eg Movilens.
 
 Try to add more complexity on the model
 
+https://docs.google.com/presentation/d/1A4VPXhg6OUQcAUnGfJF4fo-CcG9EWuxms6yogtxy0ns/edit?usp=sharing
+
 # 29 March - 05 April
 
 Evaluate the model without data augmentation
