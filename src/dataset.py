@@ -6,8 +6,10 @@ class DataSet():
     Utility class to handle dataset structure.
     """
 
-    def __init__(self, X_train, Y_train, X_val, Y_val, X_train_last_month, Y_train_last_month, representation, X_local_test, Y_local_test):
+    def __init__(self, X_train, Y_train, X_val, Y_val, X_train_last_month, Y_train_last_month, representation, X_local_test, Y_local_test, name_dataset = 'Santander'):
 
+        print(name_dataset)
+    
         assert len(X_train) == len(Y_train), (
               "images.shape: {0}, labels.shape: {1}".format(str(len(X_train)), str(len(Y_train))))
         assert len(X_val) == len(Y_val), (
@@ -41,6 +43,7 @@ class DataSet():
         self._epochs_completed = 0
         self._index_in_epoch = 0
         self._representation = representation
+        self._name_dataset = name_dataset
 
 
     def next_batch(self, batch_size):

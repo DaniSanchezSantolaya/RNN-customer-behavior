@@ -5,6 +5,7 @@ import os
 #from PhasedLSTMCell_v1 import *
 from PhasedLSTMCell import *
 import time
+import sys
 
 
 def _seq_length(sequence):
@@ -44,6 +45,7 @@ class RNN_dynamic:
         # tf Graph input
         self.x = tf.placeholder("float", [None, self.parameters['seq_length'], self.parameters['n_input']], name='x')
         self.y = tf.placeholder("float", [None, self.parameters['n_output']], name='y')
+        self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
 
         # Define weights
         weights = {
@@ -80,8 +82,9 @@ class RNN_dynamic:
                 
         #Add dropout
         if self.parameters['dropout'] > 0:
-            keep_prob = 1 - self.parameters['dropout']
-            rnn_cell = tf.nn.rnn_cell.DropoutWrapper(rnn_cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
+            rnn_cell = tf.nn.rnn_cell.DropoutWrapper(rnn_cell, output_keep_prob=self.dropout_keep_prob)
+            #keep_prob = 1 - self.parameters['dropout']
+            #rnn_cell = tf.nn.rnn_cell.DropoutWrapper(rnn_cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
             
             
         if self.parameters['rnn_layers'] > 1:
@@ -171,6 +174,9 @@ class RNN_dynamic:
 
         #Add L2 regularizatoin loss
         self.loss = self.loss + self.parameters['l2_reg'] * tf.nn.l2_loss(weights['out'])
+        if self.parameters['attentional_layer'] == 'embedding':
+            self.loss += self.parameters['l2_reg'] * tf.nn.l2_loss(weights['emb'])
+
 
         #Define optimizer
         if self.parameters['opt'].lower() == 'sgd':
@@ -243,14 +249,15 @@ class RNN_dynamic:
         
     def train(self, ds):
     
-        #Optimize
+        dropout_keep_prob = 1 - self.parameters['dropout']
         display_step = 10
         checkpoint_freq_step = 20
         #max_steps = 30000000
         #max_steps = 600000
         # Create a saver.
-        saver = tf.train.Saver()
-        self.parameters_str = str('rep' + str(ds._representation) + '-' + self.parameters['rnn_type']) + '-' + str(self.parameters['n_hidden']) + '-' + str(self.parameters['rnn_layers']) + '-' + str(self.parameters['batch_size']) + '-' + str(self.parameters['opt']) + '-' + str(self.parameters['max_steps'])
+        saver_last = tf.train.Saver()
+        saver_best = tf.train.Saver()
+        self.parameters_str = str('rep' + str(ds._representation) + '-' + self.parameters['rnn_type']) + '-' + str(self.parameters['n_hidden']) + '-' + str(self.parameters['rnn_layers']) + '-' + str(self.parameters['batch_size']) + '-' + str(self.parameters['opt']) + '-' + str(self.parameters['max_steps']) + '-' + str(self.parameters['attentional_layer']) + '-' + str(self.parameters['embedding_size'])
         self.parameters_str += '-' + time.strftime("%Y%m%d-%H%M%S")
         checkpoint_dir = './checkpoints/' + self.parameters_str
         if not tf.gfile.Exists(checkpoint_dir):
@@ -329,33 +336,33 @@ class RNN_dynamic:
 
                 
                 # Run optimization op (backprop)
-                sess.run(self.optimizer, feed_dict={self.x: batch_x, self.y: batch_y})
+                #sess.run(self.optimizer, feed_dict={self.x: batch_x, self.y: batch_y})
                 _, c = sess.run([self.optimizer, self.loss],
-                                             feed_dict={self.x: batch_x, self.y: batch_y})
+                                             feed_dict={self.x: batch_x, self.y: batch_y, self.dropout_keep_prob: dropout_keep_prob})
                 
                 if (step % display_step == 0) or ((total_iterations + self.parameters['batch_size'])  >= (self.parameters['max_steps'] - 1)):
                     print('------------------------------------------------')
                     # Calculate batch loss
-                    train_minibatch_loss, summary = sess.run([self.loss, merged], feed_dict={self.x: batch_x, self.y: batch_y})
+                    train_minibatch_loss, summary = sess.run([self.loss, merged], feed_dict={self.x: batch_x, self.y: batch_y, self.dropout_keep_prob: 1})
                     print("Iter " + str(total_iterations) + ", Minibatch train Loss= " + 
                           "{:.6f}".format(train_minibatch_loss))
                     train_writer.add_summary(summary, total_iterations)
                     # Calculate training loss at last month
-                    train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month})
+                    train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month, self.dropout_keep_prob: 1})
                     print("Iter " + str(total_iterations) + ", Last month train Loss= " + 
                           "{:.6f}".format(train_last_month_loss) + ", Last month train Accuracy= " + 
                           "{:.6f}".format(train_last_month_accuracy) + ", Last train Map= " + 
                           "{:.6f}".format(train_last_month_map))
                     train_last_month_writer.add_summary(summary, total_iterations)
                     # Calculate val loss
-                    self.val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_val, self.y:ds._Y_val})
+                    self.val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_val, self.y:ds._Y_val, self.dropout_keep_prob: 1})
                     val_writer.add_summary(summary, total_iterations)
                     print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
                           "{:.6f}".format(self.val_loss) + ", Validation  Accuracy= " + 
                           "{:.6f}".format(val_acc) + ", Validation Map= " + 
                           "{:.6f}".format(val_map))
                     # Calculate test loss
-                    self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test})
+                    self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
                     test_writer.add_summary(summary, total_iterations)
                     print("Iter " + str(total_iterations) + ", Test Loss= " + 
                           "{:.6f}".format(self.test_loss) + ", Test Accuracy= " + 
@@ -368,17 +375,17 @@ class RNN_dynamic:
                         self.best_loss = self.val_loss
                         checkpoint_dir_tmp = checkpoint_dir + '/best_model/'
                         checkpoint_path = os.path.join(checkpoint_dir_tmp, 'model_best.ckpt')
-                        saver.save(sess, checkpoint_path, global_step=total_iterations)
+                        saver_best.save(sess, checkpoint_path, global_step=total_iterations)
                         self.best_model_path = 'model_best.ckpt-' + str(total_iterations)
-                        #print('-->save best model: ' + str(checkpoint_path) + ' - step: ' + str(step) + ' best_model_path: ' + str(self.best_model_path))
                     print('------------------------------------------------')
+                    sys.stdout.flush()
                     
                     
                 #Save check points periodically or in last iteration
                 if (step % checkpoint_freq_step == 0) or ( (total_iterations + self.parameters['batch_size'])  >= (self.parameters['max_steps'] - 1)):
                     checkpoint_dir_tmp =  checkpoint_dir + '/last_model/'
                     checkpoint_path = os.path.join(checkpoint_dir_tmp, 'last_model.ckpt')
-                    saver.save(sess, checkpoint_path, global_step=total_iterations)
+                    saver_last.save(sess, checkpoint_path, global_step=total_iterations)
                     self.last_model_path = 'last_model.ckpt-' + str(total_iterations)
                     #print('-->save checkpoint model: ' + str(checkpoint_path) + ' - step: ' + str(step) + ' last_model_path: ' + str(self.last_model_path))
                     
@@ -421,11 +428,11 @@ class RNN_dynamic:
                 print('Initial index: ' + str(initial_idx))
                 print('final_idx index: ' + str(final_idx))
                 if i < (num_test_splits - 1):
-                    pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:final_idx]})
+                    pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:final_idx], self.dropout_keep_prob: 1})
                     print(pred_test_split.shape)
                     pred_test[initial_idx:final_idx] = pred_test_split
                 else:
-                    pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:]})
+                    pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:], self.dropout_keep_prob: 1})
                     print(pred_test_split.shape)
                     pred_test[initial_idx:] = pred_test_split
                 #pred_test.append(pred_test_split)
@@ -456,7 +463,7 @@ class RNN_dynamic:
         checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
         with tf.Session() as sess:
             saver.restore(sess, checkpoint_path)
-            last_hidden_state = sess.run(self.last_relevant_output, feed_dict={self.x: X_test})
+            last_hidden_state = sess.run(self.last_relevant_output, feed_dict={self.x: X_test, self.dropout_keep_prob: 1})
 
             
         
