@@ -1,6 +1,10 @@
+# 12 March - 19 April
+
+Make experiment in Movielens dataset
+
 # 05 March - 12 April
 
-Get another data set (synthetic or real). Eg Movilens. 
+Get another data set (synthetic or real). Eg Movielens. 
 
 Try to add more complexity on the model
 
