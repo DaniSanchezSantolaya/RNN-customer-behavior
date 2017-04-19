@@ -311,18 +311,21 @@ class RNN_dynamic:
             #self.val_loss, val_acc, val_map = sess.run([self.loss, self.accuracy, self.MAP], feed_dict={self.x: ds._X_val, self.y: ds._Y_val})
             #print('Final validation loss: ' + str(self.val_loss) + ', Validation accuracy: ' + str(val_acc) + ', Validation MAP: ' + str(val_map))
             
-    def predict(self, X_test):
+    def predict(self, X_test, checkpoint_path = None, num_test_splits = 1):
         #Make predictions for test set with the best model
-        checkpoint_dir = './checkpoints/' + self.parameters_str
+        if checkpoint_path is None:
+            checkpoint_dir = './checkpoints/' + self.parameters_str
+            #CHECK: is removing the best model sometimes
+            if self.best_loss < self.val_loss:
+                checkpoint_dir_tmp =  checkpoint_dir + '/best_model/'
+                checkpoint_path = os.path.join(checkpoint_dir_tmp, self.best_model_path)
+            else:
+                checkpoint_dir_tmp =  checkpoint_dir + '/last_model/'
+                checkpoint_path = os.path.join(checkpoint_dir_tmp, self.last_model_path)
+
         saver = tf.train.Saver()
 
-        #CHECK: is removing the best model sometimes
-        if self.best_loss < self.val_loss:
-            checkpoint_dir_tmp =  checkpoint_dir + '/best_model/'
-            checkpoint_path = os.path.join(checkpoint_dir_tmp, self.best_model_path)
-        else:
-            checkpoint_dir_tmp =  checkpoint_dir + '/last_model/'
-            checkpoint_path = os.path.join(checkpoint_dir_tmp, self.last_model_path)
+        
 
 
         
@@ -334,20 +337,20 @@ class RNN_dynamic:
 
             #pred_test = []
             pred_test = np.zeros((len(X_test), self.parameters['n_output']))
-            num_test_splits = 5 #Split to fit in memory when using large network architectures
+            #num_test_splits = 1 #Split to fit in memory when using large network architectures
             test_split_size = int(len(X_test)/num_test_splits)
             for i in range(num_test_splits):
                 initial_idx = i * test_split_size
                 final_idx = (i+1) * test_split_size
-                print('Initial index: ' + str(initial_idx))
-                print('final_idx index: ' + str(final_idx))
+                #print('Initial index: ' + str(initial_idx))
+                #print('final_idx index: ' + str(final_idx))
                 if i < (num_test_splits - 1):
                     pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:final_idx], self.dropout_keep_prob: 1})
-                    print(pred_test_split.shape)
+                    #print(pred_test_split.shape)
                     pred_test[initial_idx:final_idx] = pred_test_split
                 else:
                     pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:], self.dropout_keep_prob: 1})
-                    print(pred_test_split.shape)
+                    #print(pred_test_split.shape)
                     pred_test[initial_idx:] = pred_test_split
                 #pred_test.append(pred_test_split)
                 

@@ -3,10 +3,16 @@ import tensorflow as tf
 import numpy as np
 import os
 #from PhasedLSTMCell_v1 import *
-from PhasedLSTMCell import *
+#from PhasedLSTMCell import *
 import time
 import sys
 
+
+#Define RNN namespace according to tensorflow version
+if tf.__version__ == '0.12.0':
+    rnn_namespace = tf.nn.rnn_cell
+elif tf.__version__ == '1.0.1':
+    rnn_namespace = tf.contrib.rnn
 
 def _seq_length(sequence):
     used = tf.sign(tf.reduce_max(tf.abs(sequence), reduction_indices=2))
@@ -69,26 +75,26 @@ class RNN_dynamic:
 
         # Define a lstm cell with tensorflow
         if self.parameters['rnn_type'].lower() == 'lstm':
-            rnn_cell = tf.nn.rnn_cell.BasicLSTMCell(self.parameters['n_hidden'], forget_bias=1.0)
+            rnn_cell = rnn_namespace.BasicLSTMCell(self.parameters['n_hidden'], forget_bias=1.0)
         elif self.parameters['rnn_type'].lower() == 'gru':
-            rnn_cell = tf.nn.rnn_cell.GRUCell(self.parameters['n_hidden'])
+            rnn_cell = rnn_namespace.GRUCell(self.parameters['n_hidden'])
         elif self.parameters['rnn_type'] == 'lstm2':
-            rnn_cell = tf.nn.rnn_cell.LSTMCell(self.parameters['n_hidden'])
+            rnn_cell = rnn_namespace.LSTMCell(self.parameters['n_hidden'])
         elif self.parameters['rnn_type'] == 'rnn':
-            rnn_cell = tf.nn.rnn_cell.BasicRNNCell(self.parameters['n_hidden'])
+            rnn_cell = rnn_namespace.BasicRNNCell(self.parameters['n_hidden'])
         elif self.parameters['rnn_type'] == 'plstm':
             rnn_cell = PhasedLSTMCell(self.parameters['n_hidden'], use_peepholes=True, state_is_tuple=True)
 
                 
         #Add dropout
         if self.parameters['dropout'] > 0:
-            rnn_cell = tf.nn.rnn_cell.DropoutWrapper(rnn_cell, output_keep_prob=self.dropout_keep_prob)
+            rnn_cell = rnn_namespace.DropoutWrapper(rnn_cell, output_keep_prob=self.dropout_keep_prob)
             #keep_prob = 1 - self.parameters['dropout']
             #rnn_cell = tf.nn.rnn_cell.DropoutWrapper(rnn_cell, input_keep_prob=keep_prob, output_keep_prob=keep_prob)
             
             
         if self.parameters['rnn_layers'] > 1:
-            rnn_cell = tf.nn.rnn_cell.MultiRNNCell([rnn_cell] * self.parameters['rnn_layers'])  
+            rnn_cell = rnn_namespace.MultiRNNCell([rnn_cell] * self.parameters['rnn_layers'])  
             
         if self.parameters['attentional_layer'] == 'embedding':   
             self.x_reshaped = tf.reshape(self.x, [-1, int(self.x.get_shape()[2])])
@@ -167,10 +173,11 @@ class RNN_dynamic:
 
         if self.parameters['type_output'].lower() == 'sigmoid':
             self.pred_prob = tf.sigmoid(logits)
-            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits, self.y))
+            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=self.y))
         else:
             self.pred_prob = tf.nn.softmax(logits)
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, self.y))
+            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self.y))
+            
 
         #Add L2 regularizatoin loss
         self.loss = self.loss + self.parameters['l2_reg'] * tf.nn.l2_loss(weights['out'])
@@ -268,10 +275,10 @@ class RNN_dynamic:
         # Launch the graph
         with tf.Session() as sess:
             merged = tf.summary.merge_all()
-            train_writer = tf.summary.FileWriter('tensorboard/Santander/' + str(self.parameters_str) + '/train', sess.graph)
-            train_last_month_writer = tf.summary.FileWriter('tensorboard/Santander/' + str(self.parameters_str) + '/train_last_month', sess.graph)
-            val_writer = tf.summary.FileWriter('tensorboard/Santander/' + str(self.parameters_str) + '/val', sess.graph)
-            test_writer = tf.summary.FileWriter('tensorboard/Santander/' + str(self.parameters_str) + '/test', sess.graph)
+            train_writer = tf.summary.FileWriter('tensorboard/' + ds._name_dataset + '/' + str(self.parameters_str) + '/train', sess.graph)
+            train_last_month_writer = tf.summary.FileWriter('tensorboard/' + ds._name_dataset + '/' + str(self.parameters_str) + '/train_last_month', sess.graph)
+            val_writer = tf.summary.FileWriter('tensorboard/' + ds._name_dataset + '/' + str(self.parameters_str) + '/val', sess.graph)
+            test_writer = tf.summary.FileWriter('tensorboard/' + ds._name_dataset + '/' + str(self.parameters_str) + '/test', sess.graph)
             sess.run(self.init)
 
             step = 1
@@ -348,26 +355,57 @@ class RNN_dynamic:
                           "{:.6f}".format(train_minibatch_loss))
                     train_writer.add_summary(summary, total_iterations)
                     # Calculate training loss at last month
-                    train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month, self.dropout_keep_prob: 1})
-                    print("Iter " + str(total_iterations) + ", Last month train Loss= " + 
-                          "{:.6f}".format(train_last_month_loss) + ", Last month train Accuracy= " + 
-                          "{:.6f}".format(train_last_month_accuracy) + ", Last train Map= " + 
-                          "{:.6f}".format(train_last_month_map))
-                    train_last_month_writer.add_summary(summary, total_iterations)
+                    if len(ds._X_train_last_month) > 0:
+                        train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month, self.dropout_keep_prob: 1})
+                        print("Iter " + str(total_iterations) + ", Last month train Loss= " + 
+                              "{:.6f}".format(train_last_month_loss) + ", Last month train Accuracy= " + 
+                              "{:.6f}".format(train_last_month_accuracy) + ", Last train Map= " + 
+                              "{:.6f}".format(train_last_month_map))
+                        train_last_month_writer.add_summary(summary, total_iterations)
                     # Calculate val loss
-                    self.val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_val, self.y:ds._Y_val, self.dropout_keep_prob: 1})
-                    val_writer.add_summary(summary, total_iterations)
-                    print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
-                          "{:.6f}".format(self.val_loss) + ", Validation  Accuracy= " + 
-                          "{:.6f}".format(val_acc) + ", Validation Map= " + 
-                          "{:.6f}".format(val_map))
+                    if ds._name_dataset.lower() == 'santander':
+                        self.val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_val, self.y:ds._Y_val, self.dropout_keep_prob: 1})
+                        val_writer.add_summary(summary, total_iterations)
+                        print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
+                              "{:.6f}".format(self.val_loss) + ", Validation  Accuracy= " + 
+                              "{:.6f}".format(val_acc) + ", Validation Map= " + 
+                              "{:.6f}".format(val_map))
+                    elif ds._name_dataset.lower() == 'movielens':
+                        val_loss_list = []
+                        val_map_list = []
+                        val_batch_size = 100
+                        start = 0
+                        end = start + val_batch_size
+                        while end < len(ds._X_val):
+                            x_val_batch = [x.toarray() for x in ds._X_val[start:end]]
+                            y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:end]]
+                            start = end
+                            end = start + val_batch_size
+                            val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
+                            val_writer.add_summary(summary, total_iterations)
+                            val_loss_list.append(val_loss)
+                            val_map_list.append(val_map)
+                        # Do the last batch y.toarray().reshape(y.toarray().shape[1]
+                        x_val_batch = [x.toarray() for x in ds._X_val[start:]]
+                        y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:]]
+                        val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
+                        val_writer.add_summary(summary, total_iterations)
+                        val_loss_list.append(val_loss)
+                        val_map_list.append(val_map)
+                        # Compute mean of bathces val loss
+                        self.val_loss = np.mean(val_loss_list)
+                        val_map = np.mean(val_map)
+                        print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
+                              "{:.6f}".format(self.val_loss) + ", Validation Map= " + 
+                              "{:.6f}".format(val_map))
                     # Calculate test loss
-                    self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
-                    test_writer.add_summary(summary, total_iterations)
-                    print("Iter " + str(total_iterations) + ", Test Loss= " + 
-                          "{:.6f}".format(self.test_loss) + ", Test Accuracy= " + 
-                          "{:.6f}".format(test_acc) + ", Test Map= " + 
-                          "{:.6f}".format(test_map))
+                    if len(ds._X_local_test) > 0:
+                        self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
+                        test_writer.add_summary(summary, total_iterations)
+                        print("Iter " + str(total_iterations) + ", Test Loss= " + 
+                              "{:.6f}".format(self.test_loss) + ", Test Accuracy= " + 
+                              "{:.6f}".format(test_acc) + ", Test Map= " + 
+                              "{:.6f}".format(test_map))
 
                     
                     #If best loss save the model as best model so far
@@ -398,18 +436,19 @@ class RNN_dynamic:
             #self.val_loss, val_acc, val_map = sess.run([self.loss, self.accuracy, self.MAP], feed_dict={self.x: ds._X_val, self.y: ds._Y_val})
             #print('Final validation loss: ' + str(self.val_loss) + ', Validation accuracy: ' + str(val_acc) + ', Validation MAP: ' + str(val_map))
             
-    def predict(self, X_test):
+    def predict(self, X_test, checkpoint_path = None, num_test_splits = 1):
         #Make predictions for test set with the best model
-        checkpoint_dir = './checkpoints/' + self.parameters_str
-        saver = tf.train.Saver()
+        if checkpoint_path is None:
+            checkpoint_dir = './checkpoints/' + self.parameters_str
+            #CHECK: is removing the best model sometimes
+            if self.best_loss < self.val_loss:
+                checkpoint_dir_tmp =  checkpoint_dir + '/best_model/'
+                checkpoint_path = os.path.join(checkpoint_dir_tmp, self.best_model_path)
+            else:
+                checkpoint_dir_tmp =  checkpoint_dir + '/last_model/'
+                checkpoint_path = os.path.join(checkpoint_dir_tmp, self.last_model_path)
 
-        #CHECK: is removing the best model sometimes
-        if self.best_loss < self.val_loss:
-            checkpoint_dir_tmp =  checkpoint_dir + '/best_model/'
-            checkpoint_path = os.path.join(checkpoint_dir_tmp, self.best_model_path)
-        else:
-            checkpoint_dir_tmp =  checkpoint_dir + '/last_model/'
-            checkpoint_path = os.path.join(checkpoint_dir_tmp, self.last_model_path)
+        saver = tf.train.Saver()
 
 
         
@@ -420,7 +459,7 @@ class RNN_dynamic:
 
             #pred_test = []
             pred_test = np.zeros((len(X_test), self.parameters['n_output']))
-            num_test_splits = 5 #Split to fit in memory when using large network architectures
+            #num_test_splits = 5 #Split to fit in memory when using large network architectures
             test_split_size = int(len(X_test)/num_test_splits)
             for i in range(num_test_splits):
                 initial_idx = i * test_split_size
