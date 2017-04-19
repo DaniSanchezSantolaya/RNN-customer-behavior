@@ -2,7 +2,7 @@
 
 Make experiment in Movielens dataset
 
-https://docs.google.com/presentation/d/1A4VPXhg6OUQcAUnGfJF4fo-CcG9EWuxms6yogtxy0ns/edit#slide=id.p
+https://docs.google.com/presentation/d/1uR7btFRXTbD5Jdsx9_4QroqqJsQGvtsawyokfXic4JE/edit?usp=sharing
 
 # 05 March - 12 April
 
