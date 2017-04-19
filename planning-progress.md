@@ -2,6 +2,8 @@
 
 Make experiment in Movielens dataset
 
+https://docs.google.com/presentation/d/1A4VPXhg6OUQcAUnGfJF4fo-CcG9EWuxms6yogtxy0ns/edit#slide=id.p
+
 # 05 March - 12 April
 
 Get another data set (synthetic or real). Eg Movielens. 
