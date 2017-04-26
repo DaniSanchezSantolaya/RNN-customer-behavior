@@ -1,3 +1,10 @@
+# 26 March - 09 May
+
+State:
+- Research questions
+- State of the art for each research questions, and results for the datasets, if available
+- State all that can be done for this resarch questions
+
 # 19 March - 26 April
 
 Continue experiment in Movielens dataset
