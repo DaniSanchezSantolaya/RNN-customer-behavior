@@ -1,3 +1,9 @@
+# 19 March - 26 April
+
+Continue experiment in Movielens dataset
+
+https://docs.google.com/presentation/d/1WnmzEqQr3ffmW43VcswRj_ctRWJV2O0T_raQAU0tfp4/edit?usp=sharing
+
 # 12 March - 19 April
 
 Make experiment in Movielens dataset
