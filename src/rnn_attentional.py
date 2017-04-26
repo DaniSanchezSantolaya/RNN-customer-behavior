@@ -14,6 +14,8 @@ if tf.__version__ == '0.12.0':
 elif tf.__version__ == '1.0.1':
     rnn_namespace = tf.contrib.rnn
 
+b_val_in_batches = True
+    
 def _seq_length(sequence):
     used = tf.sign(tf.reduce_max(tf.abs(sequence), reduction_indices=2))
     length = tf.reduce_sum(used, reduction_indices=1)
@@ -182,7 +184,7 @@ class RNN_dynamic:
         #Add L2 regularizatoin loss
         self.loss = self.loss + self.parameters['l2_reg'] * tf.nn.l2_loss(weights['out'])
         if self.parameters['attentional_layer'] == 'embedding':
-            self.loss += self.parameters['l2_reg'] * tf.nn.l2_loss(weights['emb'])
+            self.loss += self.parameters['l2_reg'] * tf.nn.l2_loss(weights['emb']) + self.parameters['l2_reg'] * tf.nn.l2_loss(weights['out'])
 
 
         #Define optimizer
@@ -256,6 +258,8 @@ class RNN_dynamic:
         
     def train(self, ds):
     
+        train_loss_list = []
+        val_loss_list = []
         dropout_keep_prob = 1 - self.parameters['dropout']
         display_step = 10
         checkpoint_freq_step = 20
@@ -354,6 +358,8 @@ class RNN_dynamic:
                     print("Iter " + str(total_iterations) + ", Minibatch train Loss= " + 
                           "{:.6f}".format(train_minibatch_loss))
                     train_writer.add_summary(summary, total_iterations)
+                    train_loss_list.append(train_minibatch_loss)
+                    print("Iter "+ str(total_iterations) + ", mean last 10 train loss: " + str(np.mean(train_loss_list[-10:])))
                     # Calculate training loss at last month
                     if len(ds._X_train_last_month) > 0:
                         train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month, self.dropout_keep_prob: 1})
@@ -371,33 +377,44 @@ class RNN_dynamic:
                               "{:.6f}".format(val_acc) + ", Validation Map= " + 
                               "{:.6f}".format(val_map))
                     elif ds._name_dataset.lower() == 'movielens':
-                        val_loss_list = []
-                        val_map_list = []
-                        val_batch_size = 100
-                        start = 0
-                        end = start + val_batch_size
-                        while end < len(ds._X_val):
-                            x_val_batch = [x.toarray() for x in ds._X_val[start:end]]
-                            y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:end]]
-                            start = end
+                        if b_val_in_batches: # Do for only one batch
+                            #Obtain val batch for this iteration
+                            batch_x_val, batch_y_val = ds.next_batch(self.parameters['batch_size'])
+                            self.val_loss, val_map, summary = sess.run([self.loss, self.MAP, merged], feed_dict={self.x:batch_x_val, self.y:batch_y_val, self.dropout_keep_prob: 1})
+                            val_writer.add_summary(summary, total_iterations)
+                            print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
+                                  "{:.6f}".format(self.val_loss) + ", Validation Map= " + 
+                                  "{:.6f}".format(val_map))
+                            val_loss_list.append(self.val_loss)
+                            print("Iter "+ str(total_iterations) + ", mean last 10 validation loss: " + str(np.mean(val_loss_list[-10:])))
+                        else:  # Do for the whole validation set in batches
+                            val_loss_list = []
+                            val_map_list = []
+                            val_batch_size = 100
+                            start = 0
                             end = start + val_batch_size
-                            val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
+                            while end < len(ds._X_val):
+                                x_val_batch = [x.toarray() for x in ds._X_val[start:end]]
+                                y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:end]]
+                                start = end
+                                end = start + val_batch_size
+                                val_loss, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
+                                val_writer.add_summary(summary, total_iterations)
+                                val_loss_list.append(val_loss)
+                                val_map_list.append(val_map)
+                            # Do the last batch y.toarray().reshape(y.toarray().shape[1]
+                            x_val_batch = [x.toarray() for x in ds._X_val[start:]]
+                            y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:]]
+                            val_loss, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
                             val_writer.add_summary(summary, total_iterations)
                             val_loss_list.append(val_loss)
                             val_map_list.append(val_map)
-                        # Do the last batch y.toarray().reshape(y.toarray().shape[1]
-                        x_val_batch = [x.toarray() for x in ds._X_val[start:]]
-                        y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:]]
-                        val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
-                        val_writer.add_summary(summary, total_iterations)
-                        val_loss_list.append(val_loss)
-                        val_map_list.append(val_map)
-                        # Compute mean of bathces val loss
-                        self.val_loss = np.mean(val_loss_list)
-                        val_map = np.mean(val_map)
-                        print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
-                              "{:.6f}".format(self.val_loss) + ", Validation Map= " + 
-                              "{:.6f}".format(val_map))
+                            # Compute mean of bathces val loss
+                            self.val_loss = np.mean(val_loss_list)
+                            val_map = np.mean(val_map)
+                            print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
+                                  "{:.6f}".format(self.val_loss) + ", Validation Map= " + 
+                                  "{:.6f}".format(val_map))
                     # Calculate test loss
                     if len(ds._X_local_test) > 0:
                         self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
@@ -464,15 +481,15 @@ class RNN_dynamic:
             for i in range(num_test_splits):
                 initial_idx = i * test_split_size
                 final_idx = (i+1) * test_split_size
-                print('Initial index: ' + str(initial_idx))
-                print('final_idx index: ' + str(final_idx))
+                #print('Initial index: ' + str(initial_idx))
+                #print('final_idx index: ' + str(final_idx))
                 if i < (num_test_splits - 1):
                     pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:final_idx], self.dropout_keep_prob: 1})
-                    print(pred_test_split.shape)
+                    #print(pred_test_split.shape)
                     pred_test[initial_idx:final_idx] = pred_test_split
                 else:
                     pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:], self.dropout_keep_prob: 1})
-                    print(pred_test_split.shape)
+                    #print(pred_test_split.shape)
                     pred_test[initial_idx:] = pred_test_split
                 #pred_test.append(pred_test_split)
                 

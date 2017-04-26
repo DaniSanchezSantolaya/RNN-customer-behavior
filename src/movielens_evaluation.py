@@ -2,52 +2,51 @@ import tensorflow as tf
 import numpy as np
 import os
 #from PhasedLSTMCell_v1 import *
-from PhasedLSTMCell import *
+#from PhasedLSTMCell import *
 import time
 import sys
 import pickle
 from rnn_dynamic import *
+# from rnn_attentional import * #For the attentional experiment
 
 
-
-
-checkpoint_path = 'checkpoints/rep0-lstm2-50-1-128-adam-6000000-20170417-204007/best_model/model_best.ckpt-128000'
+checkpoint_path = 'checkpoints/rep0-gru-128-1-128-adam-8000000000-20170425-111137/best_model/model_best.ckpt-499200'
 
 max_interactions = 100
 
-with open("pickles/movielens/X_test_" + str(max_interactions) + ".pickle", 'rb') as handle:
+with open("pickles/movielens/X_test_" + str(max_interactions) + "_2009_filter10.pickle", 'rb') as handle:
     X_test = pickle.load(handle)
-with open("pickles/movielens/Y_test_" + str(max_interactions) + ".pickle", 'rb') as handle:
+with open("pickles/movielens/Y_test_" + str(max_interactions) + "_2009_filter10.pickle", 'rb') as handle:
     Y_test = pickle.load(handle)
-    
-    
 
 
 # tensorflow model
 model_parameters = {}
 model_parameters['opt'] = 'adam'
-model_parameters['learning_rate'] = 0.001
-model_parameters['n_hidden'] = 50
+model_parameters['learning_rate'] = 0.01
+model_parameters['n_hidden'] = 128
 model_parameters['batch_size'] = 128
-model_parameters['rnn_type'] = 'lstm2'
+model_parameters['rnn_type'] = 'gru'
 model_parameters['rnn_layers'] = 1
 model_parameters['dropout'] = 0.2
 model_parameters['l2_reg'] = 0.0
-model_parameters['type_output'] = 'softmax'
+model_parameters['type_output'] = 'sigmoid'
 model_parameters['max_steps'] = 3000000
 model_parameters['padding'] = 'right'
 model_parameters['n_input'] = X_test[0].toarray().shape[1]
 model_parameters['n_output'] = Y_test[0].toarray().shape[1]
 model_parameters['seq_length'] = X_test[0].toarray().shape[0]
+model_parameters['embedding_size'] = 32
+# Parameters for the attentional model only
+model_parameters['attentional_layer'] = 'embedding'
+model_parameters['init_stdev'] = 0.01
 
-#Create tensorflow model and train
+
+
+# Create tensorflow model and train
 print('Create model...')
 model = RNN_dynamic(model_parameters)
 model.create_model()
-
-
-
-
 
 
 def evaluate_sample(predictions, y_true, k):
@@ -76,8 +75,6 @@ def evaluate_sample(predictions, y_true, k):
     
     return recall_user_k, sps_k, ap_k, num_pos_k, total_pos
 
-
-    
     
 # Make predictions in chunks
 
@@ -93,7 +90,7 @@ batch_size = 100
 for i in range(0, len(X_test), batch_size):
     x_test = [x.toarray() for x in X_test[i:i+batch_size]]
     y_test = [y.toarray() for y in Y_test[i:i+batch_size]]
-    y_pred = model.predict(x_test, checkpoint_path)
+    logits, y_pred = model.predict(x_test, checkpoint_path)
     for j in range(len(y_pred)):
         recall_user_k, sps_k, ap_k, num_pos_k, total_pos = evaluate_sample(y_pred[j], y_test[j], k)
         recalls.append(recall_user_k)

@@ -13,6 +13,11 @@ if tf.__version__ == '0.12.0':
 elif tf.__version__ == '1.0.1':
     rnn_namespace = tf.contrib.rnn
 
+b_val_in_batches = True
+
+b_compute_acc = False
+b_compute_map = False
+    
 def _seq_length(sequence):
     used = tf.sign(tf.reduce_max(tf.abs(sequence), reduction_indices=2))
     length = tf.reduce_sum(used, reduction_indices=1)
@@ -47,12 +52,14 @@ class RNN_dynamic:
 
         # Define weights
         weights = {
-            'out': tf.Variable(tf.random_normal([self.parameters['n_hidden'], self.parameters['n_output']]))
+            'out': tf.Variable(tf.random_normal([self.parameters['n_hidden'], self.parameters['n_output']], stddev=self.parameters['init_stdev']))
         }
         biases = {
             'out': tf.Variable(tf.random_normal([self.parameters['n_output']]))
         }
-
+        if self.parameters['embedding_size'] > 0:
+            weights['emb'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']], stddev=self.parameters['init_stdev']))
+        
 
         # Define a lstm cell with tensorflow
         if self.parameters['rnn_type'].lower() == 'lstm':
@@ -77,13 +84,24 @@ class RNN_dynamic:
         if self.parameters['rnn_layers'] > 1:
             rnn_cell = rnn_namespace.MultiRNNCell([rnn_cell] * self.parameters['rnn_layers'])  
             
-            
-        outputs, states = tf.nn.dynamic_rnn(
-            rnn_cell,
-            self.x,
-            dtype=tf.float32,
-            sequence_length=_seq_length(self.x)
-        )
+        
+        if self.parameters['embedding_size'] > 0:   
+            self.x_reshaped = tf.reshape(self.x, [-1, int(self.x.get_shape()[2])])
+            v = tf.matmul(self.x_reshaped, weights['emb'])
+            v_reshaped = tf.reshape(v, [-1, self.parameters['seq_length'], self.parameters['embedding_size']])
+            outputs, states = tf.nn.dynamic_rnn(
+                rnn_cell,
+                v_reshaped,
+                dtype=tf.float32,
+                sequence_length=_seq_length(v_reshaped)
+            )
+        else:
+            outputs, states = tf.nn.dynamic_rnn(
+                rnn_cell,
+                self.x,
+                dtype=tf.float32,
+                sequence_length=_seq_length(self.x)
+            )
 
         #Obtaining the correct output state
         if self.parameters['padding'].lower() == 'right': #If padding zeros is at right, we need to get the right output, since the last is not validation
@@ -92,20 +110,33 @@ class RNN_dynamic:
             self.last_relevant_output = outputs[:,-1,:]
         
 
-        logits = tf.matmul(self.last_relevant_output, weights['out']) + biases['out']
+        
         #self._debug = logits
         #self._debug = outputs
 
         if self.parameters['type_output'].lower() == 'sigmoid':
-            self.pred_prob = tf.sigmoid(logits)
-            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=self.y))
-        else:
-            self.pred_prob = tf.nn.softmax(logits)
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self.y))
+            self.logits = tf.matmul(self.last_relevant_output, weights['out']) + biases['out']
+            self.pred_prob = tf.sigmoid(self.logits)
+            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.logits, self.y))
+        elif self.parameters['type_output'].lower() == 'softmax':
+            self.logits = tf.matmul(self.last_relevant_output, weights['out']) + biases['out']
+            self.pred_prob = tf.nn.softmax(self.logits)
+            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.y))
+        elif self.parameters['type_output'].lower() == 'sampled_softmax':
+            self.logits = tf.matmul(self.last_relevant_output, weights['out']) + biases['out']
+            self.pred_prob = tf.nn.softmax(self.logits)
+            weights_out_t = tf.transpose(weights['out'])
+            labels_ids = tf.where(tf.equal(self.y, 1))[:, 1]
+            labels_t = tf.reshape(labels_ids, [-1, 1])
+            self.loss = tf.reduce_mean(tf.nn.sampled_softmax_loss(weights=weights_out_t, biases=biases['out'], inputs=self.last_relevant_output,
+                               labels=labels_t, num_sampled=128, num_classes=self.parameters['n_output']))
             
+
 
         #Add L2 regularizatoin loss
         self.loss = self.loss + self.parameters['l2_reg'] * tf.nn.l2_loss(weights['out'])
+        if self.parameters['embedding_size'] > 0:
+            self.loss += self.parameters['l2_reg'] * tf.nn.l2_loss(weights['emb']) + self.parameters['l2_reg'] * tf.nn.l2_loss(weights['out'])
 
         #Define optimizer
         if self.parameters['opt'].lower() == 'sgd':
@@ -130,57 +161,65 @@ class RNN_dynamic:
             self.optimizer = tf.train.RMSPropOptimizer(learning_rate=self.parameters['learning_rate']).minimize(self.loss)
         
 
+        if b_compute_acc:
+            class_predictions = tf.cast(self.pred_prob > 0.5, tf.float32)
+            correct_pred = tf.equal(class_predictions, self.y)
+            self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+            tf.summary.scalar('accuracy', self.accuracy)
+        else:
+            self.accuracy = tf.constant(0)
 
-        # Accuracy (Find a better evaluation)
-        class_predictions = tf.cast(self.pred_prob > 0.5, tf.float32)
-        correct_pred = tf.equal(class_predictions, self.y)
-        self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-        #correct_pred = tf.equal(tf.argmax(pred,1), tf.argmax(y,1))
-        #accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+        if b_compute_map:
+            #MAP
+            num_samples = tf.shape(self.y)[0]
+            cut_at_k = 7
+            mask_vector = np.zeros(self.parameters['n_output'])
+            mask_vector[:cut_at_k] = 1
+            sorted_pred_ind = tf.nn.top_k(self.pred_prob, self.parameters['n_output'], sorted=True)[1]
+            shape_ind = tf.shape(sorted_pred_ind)
+            auxiliary_indices = tf.meshgrid(*[tf.range(d) for d in (tf.unstack(shape_ind[:(sorted_pred_ind.get_shape().ndims - 1)]) + [self.parameters['n_output']])], indexing='ij')
+            t_sort_prod = tf.gather_nd(self.y, tf.stack(auxiliary_indices[:-1] + [sorted_pred_ind], axis=-1))
 
-        #MAP
-        num_samples = tf.shape(self.y)[0]
-        cut_at_k = 7
-        mask_vector = np.zeros(self.parameters['n_output'])
-        mask_vector[:cut_at_k] = 1
-        sorted_pred_ind = tf.nn.top_k(self.pred_prob, self.parameters['n_output'], sorted=True)[1]
-        shape_ind = tf.shape(sorted_pred_ind)
-        auxiliary_indices = tf.meshgrid(*[tf.range(d) for d in (tf.unstack(shape_ind[:(sorted_pred_ind.get_shape().ndims - 1)]) + [self.parameters['n_output']])], indexing='ij')
-        t_sort_prod = tf.gather_nd(self.y, tf.stack(auxiliary_indices[:-1] + [sorted_pred_ind], axis=-1))
+            num_added = tf.reduce_sum(t_sort_prod, axis=1)
+            cumsum = tf.cumsum(t_sort_prod, axis=1)
+            #repeat = tf.constant(np.repeat( (np.arange(self.parameters['n_output']) + 1).reshape(1, self.parameters['n_output']), y, axis=0))
+            repeat = tf.reshape( (tf.range(self.parameters['n_output']) + 1), [1, -1])
+            repeat = tf.tile(repeat, [tf.shape(self.y)[0], 1])
+            p_at_k = tf.cast(cumsum, tf.float32)/tf.cast(repeat, tf.float32)
 
-        num_added = tf.reduce_sum(t_sort_prod, axis=1)
-        cumsum = tf.cumsum(t_sort_prod, axis=1)
-        #repeat = tf.constant(np.repeat( (np.arange(self.parameters['n_output']) + 1).reshape(1, self.parameters['n_output']), y, axis=0))
-        repeat = tf.reshape( (tf.range(self.parameters['n_output']) + 1), [1, -1])
-        repeat = tf.tile(repeat, [tf.shape(self.y)[0], 1])
-        p_at_k = tf.cast(cumsum, tf.float32)/tf.cast(repeat, tf.float32)
-
-        mask_at_k = tf.reshape(mask_vector, [1, -1])
-        mask_at_k = tf.tile(mask_at_k, [tf.shape(self.y)[0], 1])
-        #mask_at_k = tf.constant(np.repeat(mask_vector.reshape(1, self.parameters['n_output']), num_samples, axis=0))
+            mask_at_k = tf.reshape(mask_vector, [1, -1])
+            mask_at_k = tf.tile(mask_at_k, [tf.shape(self.y)[0], 1])
+            #mask_at_k = tf.constant(np.repeat(mask_vector.reshape(1, self.parameters['n_output']), num_samples, axis=0))
 
 
-        sum_p_at_k = tf.reduce_sum((tf.cast(p_at_k, tf.float32) * tf.cast(mask_at_k, tf.float32)),  axis=1)
-        t_cut = tf.fill((1, num_samples), cut_at_k)
-        num_added_cut_k = tf.minimum(tf.cast(t_cut, tf.float32), tf.cast(num_added, tf.float32))
-        num_added_cut_k = tf.maximum(num_added_cut_k, tf.cast(tf.fill((1, num_samples), 1), tf.float32))
-        #AP = tf.cast(sum_p_at_k, tf.float32)/tf.cast(num_added_cut_k, tf.float32)
-        AP = tf.cast(sum_p_at_k, tf.float32)/tf.cast(cut_at_k, tf.float32)
-        self.MAP = tf.reduce_mean(AP)
-        
-        #Add summaries
-        tf.summary.scalar('MAP', self.MAP)
+            sum_p_at_k = tf.reduce_sum((tf.cast(p_at_k, tf.float32) * tf.cast(mask_at_k, tf.float32)),  axis=1)
+            t_cut = tf.fill((1, num_samples), cut_at_k)
+            num_added_cut_k = tf.minimum(tf.cast(t_cut, tf.float32), tf.cast(num_added, tf.float32))
+            num_added_cut_k = tf.maximum(num_added_cut_k, tf.cast(tf.fill((1, num_samples), 1), tf.float32))
+            # AP = tf.cast(sum_p_at_k, tf.float32)/tf.cast(num_added_cut_k, tf.float32)
+            AP = tf.cast(sum_p_at_k, tf.float32)/tf.cast(cut_at_k, tf.float32)
+            self.MAP = tf.reduce_mean(AP)
+            
+            # Add summaries
+            tf.summary.scalar('MAP', self.MAP)
+        else:
+            self.MAP = tf.constant(0)
+            
         tf.summary.scalar('loss', self.loss)
-        tf.summary.scalar('accuracy', self.accuracy)
-        
-        
+
+        tf.summary.histogram('W_out', weights['out'])
+        if self.parameters['embedding_size'] > 0:
+            tf.summary.histogram('W_emb', weights['emb'])
+               
         self.init = tf.global_variables_initializer()
         
     def train(self, ds):
-    
+        
+        train_loss_list = []
+        val_loss_list = []
         dropout_keep_prob = 1 - self.parameters['dropout']
-        display_step = 1000
-        checkpoint_freq_step = 1000
+        display_step = 10
+        checkpoint_freq_step = 50
         #max_steps = 30000000
         #max_steps = 600000
         # Create a saver.
@@ -208,10 +247,7 @@ class RNN_dynamic:
             # Keep training until reach max iterations
             while step * self.parameters['batch_size'] < self.parameters['max_steps']:
                 total_iterations = step * self.parameters['batch_size']
-                
-                #print('step: ' + str(step))
-                #print('max steps: ' + str(self.parameters['max_steps']))
-                #print('a: ' + str((total_iterations + step * self.parameters['batch_size'])))
+
                 
                 #Obtain batch for this iteration
                 batch_x, batch_y = ds.next_batch(self.parameters['batch_size'])
@@ -228,8 +264,9 @@ class RNN_dynamic:
                     print("Iter " + str(total_iterations) + ", Minibatch train Loss= " + 
                           "{:.6f}".format(train_minibatch_loss))
                     train_writer.add_summary(summary, total_iterations)
-                    # Calculate training loss at last month
-                    
+                    train_loss_list.append(train_minibatch_loss)
+                    print("Iter "+ str(total_iterations) + ", mean last 15 train loss: " + str(np.mean(train_loss_list[-15:])))
+                    # Calculate training loss at last month  
                     if len(ds._X_train_last_month) > 0:
                         train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month, self.dropout_keep_prob: 1})
                         print("Iter " + str(total_iterations) + ", Last month train Loss= " + 
@@ -246,33 +283,44 @@ class RNN_dynamic:
                               "{:.6f}".format(val_acc) + ", Validation Map= " + 
                               "{:.6f}".format(val_map))
                     elif ds._name_dataset.lower() == 'movielens':
-                        val_loss_list = []
-                        val_map_list = []
-                        val_batch_size = 100
-                        start = 0
-                        end = start + val_batch_size
-                        while end < len(ds._X_val):
-                            x_val_batch = [x.toarray() for x in ds._X_val[start:end]]
-                            y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:end]]
-                            start = end
+                        if b_val_in_batches: # Do for only one batch
+                            #Obtain val batch for this iteration
+                            batch_x_val, batch_y_val = ds.next_batch(self.parameters['batch_size'])
+                            self.val_loss, val_map, summary = sess.run([self.loss, self.MAP, merged], feed_dict={self.x:batch_x_val, self.y:batch_y_val, self.dropout_keep_prob: 1})
+                            val_writer.add_summary(summary, total_iterations)
+                            print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
+                                  "{:.6f}".format(self.val_loss) + ", Validation Map= " + 
+                                  "{:.6f}".format(val_map))
+                            val_loss_list.append(self.val_loss)
+                            print("Iter "+ str(total_iterations) + ", mean last 15 validation loss: " + str(np.mean(val_loss_list[-15:])))
+                        else:  # Do for the whole validation set in batches
+                            val_loss_list = []
+                            val_map_list = []
+                            val_batch_size = 100
+                            start = 0
                             end = start + val_batch_size
-                            val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
+                            while end < len(ds._X_val):
+                                x_val_batch = [x.toarray() for x in ds._X_val[start:end]]
+                                y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:end]]
+                                start = end
+                                end = start + val_batch_size
+                                val_loss, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
+                                val_writer.add_summary(summary, total_iterations)
+                                val_loss_list.append(val_loss)
+                                val_map_list.append(val_map)
+                            # Do the last batch y.toarray().reshape(y.toarray().shape[1]
+                            x_val_batch = [x.toarray() for x in ds._X_val[start:]]
+                            y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:]]
+                            val_loss, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
                             val_writer.add_summary(summary, total_iterations)
                             val_loss_list.append(val_loss)
                             val_map_list.append(val_map)
-                        # Do the last batch y.toarray().reshape(y.toarray().shape[1]
-                        x_val_batch = [x.toarray() for x in ds._X_val[start:]]
-                        y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:]]
-                        val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
-                        val_writer.add_summary(summary, total_iterations)
-                        val_loss_list.append(val_loss)
-                        val_map_list.append(val_map)
-                        # Compute mean of bathces val loss
-                        self.val_loss = np.mean(val_loss_list)
-                        val_map = np.mean(val_map)
-                        print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
-                              "{:.6f}".format(self.val_loss) + ", Validation Map= " + 
-                              "{:.6f}".format(val_map))
+                            # Compute mean of bathces val loss
+                            self.val_loss = np.mean(val_loss_list)
+                            val_map = np.mean(val_map)
+                            print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
+                                  "{:.6f}".format(self.val_loss) + ", Validation Map= " + 
+                                  "{:.6f}".format(val_map))
                     # Calculate test loss
                     if len(ds._X_local_test) > 0:
                         self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
@@ -284,8 +332,8 @@ class RNN_dynamic:
 
                     
                     #If best loss save the model as best model so far
-                    if self.val_loss < self.best_loss:
-                        self.best_loss = self.val_loss
+                    if np.mean(val_loss_list[-15:]) < self.best_loss:
+                        self.best_loss = np.mean(val_loss_list[-15:])
                         checkpoint_dir_tmp = checkpoint_dir + '/best_model/'
                         checkpoint_path = os.path.join(checkpoint_dir_tmp, 'model_best.ckpt')
                         saver_best.save(sess, checkpoint_path, global_step=total_iterations)
@@ -312,10 +360,10 @@ class RNN_dynamic:
             #print('Final validation loss: ' + str(self.val_loss) + ', Validation accuracy: ' + str(val_acc) + ', Validation MAP: ' + str(val_map))
             
     def predict(self, X_test, checkpoint_path = None, num_test_splits = 1):
-        #Make predictions for test set with the best model
+        # Make predictions for test set with the best model
         if checkpoint_path is None:
             checkpoint_dir = './checkpoints/' + self.parameters_str
-            #CHECK: is removing the best model sometimes
+            # CHECK: is removing the best model sometimes
             if self.best_loss < self.val_loss:
                 checkpoint_dir_tmp =  checkpoint_dir + '/best_model/'
                 checkpoint_path = os.path.join(checkpoint_dir_tmp, self.best_model_path)
@@ -325,11 +373,7 @@ class RNN_dynamic:
 
         saver = tf.train.Saver()
 
-        
-
-
-        
-        #checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
+        # checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
         with tf.Session() as sess:
             print('load model: ' + str(checkpoint_path))
             saver.restore(sess, checkpoint_path)
@@ -345,11 +389,11 @@ class RNN_dynamic:
                 #print('Initial index: ' + str(initial_idx))
                 #print('final_idx index: ' + str(final_idx))
                 if i < (num_test_splits - 1):
-                    pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:final_idx], self.dropout_keep_prob: 1})
+                    logits, pred_test_split = sess.run([self.logits, self.pred_prob], feed_dict={self.x: X_test[initial_idx:final_idx], self.dropout_keep_prob: 1})
                     #print(pred_test_split.shape)
                     pred_test[initial_idx:final_idx] = pred_test_split
                 else:
-                    pred_test_split = sess.run(self.pred_prob, feed_dict={self.x: X_test[initial_idx:], self.dropout_keep_prob: 1})
+                    logits, pred_test_split = sess.run([self.logits, self.pred_prob], feed_dict={self.x: X_test[initial_idx:], self.dropout_keep_prob: 1})
                     #print(pred_test_split.shape)
                     pred_test[initial_idx:] = pred_test_split
                 #pred_test.append(pred_test_split)
@@ -361,7 +405,7 @@ class RNN_dynamic:
             #print(pred_test.shape)
             #pred_test = pred_test.reshape((len(X_test), self.parameters['n_output']))
         
-        return pred_test
+        return logits, pred_test
         
     def get_last_hidden_state(self, X_test):
         #Make predictions for test set with the best model

@@ -17,9 +17,9 @@ random.seed(17)
 random.seed(17)
 np.random.seed(17)
 
-#python experiment_movielens.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps 
-#python experiment_movielens.py 100 right 0.03 adam 0.01 50 128 lstm2 1 0.2 0 softmax 4000000 > movielens.txt
-#ubuntu@packer-ubuntu-16:~$ python3.5 experiment_movielens.py 100 right 0.025 adam 0.01 50 128 lstm2 1 0.2 0 softmax 10000000 > movielens.txt
+#python experiment_movielens.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps init_stdev embedding_size
+#python experiment_movielens.py 100 right 0.03 adam 0.01 50 128 lstm2 1 0.2 0 softmax 4000000 0.1 0 > movielens.txt
+#ubuntu@packer-ubuntu-16:~$ python3.5 experiment_movielens.py 100 right 0.025 adam 0.01 50 128 lstm2 1 0.2 0 softmax 10000000 0.1 0 > movielens.txt
 
 
 start = time.time()
@@ -51,11 +51,12 @@ if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 
     model_parameters['type_output'] = 'sigmoid'
     model_parameters['max_steps'] = 30000
     model_parameters['padding'] = padding
+    model_parameters['init_stdev'] = 1
+    model_parameters['embedding_size'] = 0
+    
 
 
-else:
-#python experiment_movielens.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps 
-#python experiment_movielens.py 100 right 0.15 adam 0.001 50 128 lstm2 1 0.1 0 softmax 40000 
+else: 
     #Representation parameters
     max_interactions = int(sys.argv[1])
     padding = sys.argv[2]
@@ -75,7 +76,9 @@ else:
     model_parameters['type_output'] = sys.argv[12]
     model_parameters['max_steps'] = int(sys.argv[13])
     model_parameters['padding'] = padding
-
+    model_parameters['init_stdev'] = float(sys.argv[14])
+    model_parameters['embedding_size'] = int(sys.argv[15])
+    
 
 
 
@@ -95,6 +98,8 @@ print('dropout: ' + str(model_parameters['dropout']))
 print('l2_reg: ' + str(model_parameters['l2_reg']))
 print('type_output: ' + str(model_parameters['type_output']))
 print('max_steps: ' + str(model_parameters['max_steps']))
+print('init_stdev: ' + str(model_parameters['init_stdev']))
+print('embedding_size: ' + str(model_parameters['embedding_size']))
 
 
 #### Load train pickle
