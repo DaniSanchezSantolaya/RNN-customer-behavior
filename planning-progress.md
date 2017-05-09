@@ -1,9 +1,17 @@
-# 26 March - 09 May
+# 09 May - 24 May
+
+State big hyphotesis for every research question (why to do that) and for every subquestion.
+
+Complete results table
+
+# 26 April - 09 May
 
 State:
 - Research questions
 - State of the art for each research questions, and results for the datasets, if available
 - State all that can be done for this resarch questions
+
+https://docs.google.com/presentation/d/1KfEScXgR78tz7VD7M7YtcKY37x6KHp8fN-xebO-9Qps/edit?usp=sharing
 
 # 19 March - 26 April
 
