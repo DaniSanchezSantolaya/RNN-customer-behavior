@@ -13,19 +13,19 @@ State:
 
 https://docs.google.com/presentation/d/1KfEScXgR78tz7VD7M7YtcKY37x6KHp8fN-xebO-9Qps/edit?usp=sharing
 
-# 19 March - 26 April
+# 19 April - 26 April
 
 Continue experiment in Movielens dataset
 
 https://docs.google.com/presentation/d/1WnmzEqQr3ffmW43VcswRj_ctRWJV2O0T_raQAU0tfp4/edit?usp=sharing
 
-# 12 March - 19 April
+# 12 April - 19 April
 
 Make experiment in Movielens dataset
 
 https://docs.google.com/presentation/d/1uR7btFRXTbD5Jdsx9_4QroqqJsQGvtsawyokfXic4JE/edit?usp=sharing
 
-# 05 March - 12 April
+# 05 Arpil - 12 April
 
 Get another data set (synthetic or real). Eg Movielens. 
 
