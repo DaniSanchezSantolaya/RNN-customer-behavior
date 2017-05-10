@@ -32,7 +32,10 @@ def _last_relevant(output, length):
 
     return relevant
     
-    
+b_val_in_batches = True
+
+b_compute_acc = False
+b_compute_map = True
     
 class RNN_dynamic:
 
@@ -56,21 +59,23 @@ class RNN_dynamic:
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
 
         # Define weights
-        weights = {
-            'alphas': tf.Variable(tf.random_normal([self.parameters['n_hidden'], 1]))
+        self.weights = {
+            'alphas': tf.Variable(tf.random_normal([self.parameters['n_hidden'], 1], stddev=self.parameters['init_stdev']))
         }
         
         if self.parameters['attentional_layer'] == 'hidden_state':
-            weights['out'] = tf.Variable(tf.random_normal([self.parameters['n_hidden'], self.parameters['n_output']]))
+            self.weights['out'] = tf.Variable(tf.random_normal([self.parameters['n_hidden'], self.parameters['n_output']], stddev=self.parameters['init_stdev']), name='w_out')
         elif self.parameters['attentional_layer'] == 'input':
-            weights['out'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['n_output']]))
+            self.weights['out'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['n_output']], stddev=self.parameters['init_stdev']), name='w_out')
         elif self.parameters['attentional_layer'] == 'embedding':
-            weights['out'] = tf.Variable(tf.random_normal([self.parameters['embedding_size'], self.parameters['n_output']]))
-            weights['emb'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']]))
+            self.weights['out'] = tf.Variable(tf.random_normal([self.parameters['embedding_size'], self.parameters['n_output']], stddev=self.parameters['init_stdev']), name='w_out')
+
+        if self.parameters['embedding_size'] > 0:
+            self.weights['emb'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']], stddev=self.parameters['init_stdev']), name='w_emb')
             
-        biases = {
-            'out': tf.Variable(tf.random_normal([self.parameters['n_output']])),
-            'alphas': tf.Variable(tf.random_normal([1]))
+        self.biases = {
+            'out': tf.Variable(tf.random_normal([self.parameters['n_output']]), name='b_out'),
+            'alphas': tf.Variable(tf.random_normal([1]), name='b_alphas')
             #'alphas': tf.Variable(tf.random_normal([self.parameters['seq_length']]))
         }
 
@@ -98,9 +103,10 @@ class RNN_dynamic:
         if self.parameters['rnn_layers'] > 1:
             rnn_cell = rnn_namespace.MultiRNNCell([rnn_cell] * self.parameters['rnn_layers'])  
             
-        if self.parameters['attentional_layer'] == 'embedding':   
+        #if self.parameters['attentional_layer'] == 'embedding':
+        if self.parameters['embedding_size'] > 0:
             self.x_reshaped = tf.reshape(self.x, [-1, int(self.x.get_shape()[2])])
-            v = tf.matmul(self.x_reshaped, weights['emb'])
+            v = tf.matmul(self.x_reshaped, self.weights['emb'])
             v_reshaped = tf.reshape(v, [-1, self.parameters['seq_length'], self.parameters['embedding_size']])
             outputs, states = tf.nn.dynamic_rnn(
                 rnn_cell,
@@ -119,27 +125,27 @@ class RNN_dynamic:
 
         
         self.outputs = outputs
-        self.weights = weights
-        self.biases = biases
+        #self.weights = weights
+        #self.biases = biases
         #Obtain ej
         batch_shape = outputs.get_shape()[0]
-        batch_per_seq_length_shape = batch_shape * outputs.get_shape()[1]
+        #batch_per_seq_length_shape = batch_shape * outputs.get_shape()[1]
         self.outputs_reshaped = tf.reshape(outputs, [-1, int(outputs.get_shape()[2])])
-        print('--------------------')
-        print('weights out:')
-        print(weights['out'].get_shape())
-        print('outputs:')
-        print(outputs.get_shape())
-        print('weights alphas:')
-        print(weights['alphas'].get_shape())
-        print('self.outputs_reshaped:')
-        print(self.outputs_reshaped.get_shape())
-        print('biases[alphas]:')
-        print(biases['alphas'].get_shape())
-        print('--------------------')
-        self.ejs = tf.matmul(self.outputs_reshaped, weights['alphas']) + biases['alphas'] #Check
-        print('self.ejs:')
-        print(self.ejs.get_shape())
+        #print('--------------------')
+        #print('weights out:')
+        #print(weights['out'].get_shape())
+        #print('outputs:')
+        #print(outputs.get_shape())
+        #print('weights alphas:')
+        #print(weights['alphas'].get_shape())
+        #print('self.outputs_reshaped:')
+        #print(self.outputs_reshaped.get_shape())
+        #print('biases[alphas]:')
+        #print(biases['alphas'].get_shape())
+        #print('--------------------')
+        self.ejs = tf.matmul(self.outputs_reshaped, self.weights['alphas']) + self.biases['alphas'] #Check
+        #print('self.ejs:')
+        #print(self.ejs.get_shape())
         
         
         #Obtain attention weights alphas
@@ -166,7 +172,7 @@ class RNN_dynamic:
             #self.last_relevant_output = outputs[:,-1,:]
         #logits = tf.matmul(self.last_relevant_output, weights['out']) + biases['out']
         
-        logits = tf.matmul(self.context_reduced, weights['out']) + biases['out']
+        logits = tf.matmul(self.context_reduced, self.weights['out']) + self.biases['out']
 
 
         
@@ -175,16 +181,49 @@ class RNN_dynamic:
 
         if self.parameters['type_output'].lower() == 'sigmoid':
             self.pred_prob = tf.sigmoid(logits)
-            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=self.y))
+            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits, self.y))
         else:
             self.pred_prob = tf.nn.softmax(logits)
             self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self.y))
             
 
         #Add L2 regularizatoin loss
-        self.loss = self.loss + self.parameters['l2_reg'] * tf.nn.l2_loss(weights['out'])
+        self.loss = self.loss + self.parameters['l2_reg'] * tf.nn.l2_loss(self.weights['out'])
         if self.parameters['attentional_layer'] == 'embedding':
-            self.loss += self.parameters['l2_reg'] * tf.nn.l2_loss(weights['emb']) + self.parameters['l2_reg'] * tf.nn.l2_loss(weights['out'])
+            self.loss += self.parameters['l2_reg'] * tf.nn.l2_loss(self.weights['emb'])
+
+        for v in tf.trainable_variables():
+            if (v.name == 'RNN/GRUCell/Gates/Linear/Matrix:0') or (v.name == 'rnn/gru_cell/gates/weights:0'):
+                gru_w1 = v
+            elif (v.name == 'RNN/GRUCell/Gates/Linear/Bias:0') or (v.name == 'rnn/gru_cell/gates/biases:0'):
+                gru_b1 = v
+            elif (v.name == 'RNN/GRUCell/Candidate/Linear/Matrix:0') or (v.name == 'rnn/gru_cell/candidate/weights:0'):
+                gru_w2 = v
+            elif (v.name == 'RNN/GRUCell/Candidate/Linear/Bias:0') or (v.name == 'rnn/gru_cell/candidate/biases:0'):
+                gru_b2 = v
+            elif (v.name == 'RNN/BasicLSTMCell/Linear/Matrix:0') or (v.name == 'rnn/basic_lstm_cell/weights:0'):
+                basic_lstm_w = v
+            elif (v.name == 'RNN/BasicLSTMCell/Linear/Bias:0') or (v.name == 'rnn/basic_lstm_cell/biases:0'):
+                basic_lstm_b = v
+            elif (v.name == 'RNN/LSTMCell/W_0:0') or (v.name == 'rnn/lstm_cell/weights:0'):
+                lstm_w = v
+            elif (v.name == 'RNN/LSTMCell/B:0') or (v.name == 'rnn/lstm_cell/biases:0'):
+                lstm_b = v
+
+        if self.parameters['rnn_type'].lower() == 'gru':
+            self.loss += self.parameters['l2_reg'] * tf.nn.l2_loss(gru_w1) + self.parameters['l2_reg'] * tf.nn.l2_loss(gru_w2)
+            tf.summary.histogram('gru_w1', gru_w1)
+            tf.summary.histogram('gru_b1', gru_b1)
+            tf.summary.histogram('gru_w2', gru_w2)
+            tf.summary.histogram('gru_b2', gru_b2)
+        elif self.parameters['rnn_type'].lower() == 'lstm':
+            self.loss += self.parameters['l2_reg'] * tf.nn.l2_loss(basic_lstm_w)
+            tf.summary.histogram('basic_lstm_w', basic_lstm_w)
+            tf.summary.histogram('basic_lstm_b', basic_lstm_b)
+        elif self.parameters['rnn_type'].lower() == 'lstm2':
+            self.loss += self.parameters['l2_reg'] * tf.nn.l2_loss(lstm_w)
+            tf.summary.histogram('lstm_w', lstm_w)
+            tf.summary.histogram('lstm_b', lstm_b)
 
 
         #Define optimizer
@@ -208,61 +247,66 @@ class RNN_dynamic:
             self.optimizer = tf.train.ProximalAdagradOptimizer(learning_rate=self.parameters['learning_rate']).minimize(self.loss)
         elif self.parameters['opt'].lower() == 'rms':
             self.optimizer = tf.train.RMSPropOptimizer(learning_rate=self.parameters['learning_rate']).minimize(self.loss)
-        
 
-
-        # Accuracy (Find a better evaluation)
-        class_predictions = tf.cast(self.pred_prob > 0.5, tf.float32)
-        correct_pred = tf.equal(class_predictions, self.y)
-        self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-        #correct_pred = tf.equal(tf.argmax(pred,1), tf.argmax(y,1))
-        #accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+        if b_compute_acc:
+            class_predictions = tf.cast(self.pred_prob > 0.5, tf.float32)
+            correct_pred = tf.equal(class_predictions, self.y)
+            self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+            tf.summary.scalar('accuracy', self.accuracy)
+        else:
+            self.accuracy = tf.constant(0)
 
         #MAP
-        num_samples = tf.shape(self.y)[0]
-        cut_at_k = 7
-        mask_vector = np.zeros(self.parameters['n_output'])
-        mask_vector[:cut_at_k] = 1
-        sorted_pred_ind = tf.nn.top_k(self.pred_prob, self.parameters['n_output'], sorted=True)[1]
-        shape_ind = tf.shape(sorted_pred_ind)
-        auxiliary_indices = tf.meshgrid(*[tf.range(d) for d in (tf.unstack(shape_ind[:(sorted_pred_ind.get_shape().ndims - 1)]) + [self.parameters['n_output']])], indexing='ij')
-        t_sort_prod = tf.gather_nd(self.y, tf.stack(auxiliary_indices[:-1] + [sorted_pred_ind], axis=-1))
+        if b_compute_map:
+            num_samples = tf.shape(self.y)[0]
+            cut_at_k = 7
+            mask_vector = np.zeros(self.parameters['n_output'])
+            mask_vector[:cut_at_k] = 1
+            sorted_pred_ind = tf.nn.top_k(self.pred_prob, self.parameters['n_output'], sorted=True)[1]
+            shape_ind = tf.shape(sorted_pred_ind)
+            auxiliary_indices = tf.meshgrid(*[tf.range(d) for d in (tf.unstack(shape_ind[:(sorted_pred_ind.get_shape().ndims - 1)]) + [self.parameters['n_output']])], indexing='ij')
+            t_sort_prod = tf.gather_nd(self.y, tf.stack(auxiliary_indices[:-1] + [sorted_pred_ind], axis=-1))
 
-        num_added = tf.reduce_sum(t_sort_prod, axis=1)
-        cumsum = tf.cumsum(t_sort_prod, axis=1)
-        #repeat = tf.constant(np.repeat( (np.arange(self.parameters['n_output']) + 1).reshape(1, self.parameters['n_output']), y, axis=0))
-        repeat = tf.reshape( (tf.range(self.parameters['n_output']) + 1), [1, -1])
-        repeat = tf.tile(repeat, [tf.shape(self.y)[0], 1])
-        p_at_k = tf.cast(cumsum, tf.float32)/tf.cast(repeat, tf.float32)
+            num_added = tf.reduce_sum(t_sort_prod, axis=1)
+            cumsum = tf.cumsum(t_sort_prod, axis=1)
+            #repeat = tf.constant(np.repeat( (np.arange(self.parameters['n_output']) + 1).reshape(1, self.parameters['n_output']), y, axis=0))
+            repeat = tf.reshape( (tf.range(self.parameters['n_output']) + 1), [1, -1])
+            repeat = tf.tile(repeat, [tf.shape(self.y)[0], 1])
+            p_at_k = tf.cast(cumsum, tf.float32)/tf.cast(repeat, tf.float32)
 
-        mask_at_k = tf.reshape(mask_vector, [1, -1])
-        mask_at_k = tf.tile(mask_at_k, [tf.shape(self.y)[0], 1])
-        #mask_at_k = tf.constant(np.repeat(mask_vector.reshape(1, self.parameters['n_output']), num_samples, axis=0))
+            mask_at_k = tf.reshape(mask_vector, [1, -1])
+            mask_at_k = tf.tile(mask_at_k, [tf.shape(self.y)[0], 1])
+            #mask_at_k = tf.constant(np.repeat(mask_vector.reshape(1, self.parameters['n_output']), num_samples, axis=0))
 
 
-        sum_p_at_k = tf.reduce_sum((tf.cast(p_at_k, tf.float32) * tf.cast(mask_at_k, tf.float32)),  axis=1)
-        t_cut = tf.fill((1, num_samples), cut_at_k)
-        num_added_cut_k = tf.minimum(tf.cast(t_cut, tf.float32), tf.cast(num_added, tf.float32))
-        num_added_cut_k = tf.maximum(num_added_cut_k, tf.cast(tf.fill((1, num_samples), 1), tf.float32))
-        #AP = tf.cast(sum_p_at_k, tf.float32)/tf.cast(num_added_cut_k, tf.float32)
-        AP = tf.cast(sum_p_at_k, tf.float32)/tf.cast(cut_at_k, tf.float32)
-        self.MAP = tf.reduce_mean(AP)
+            sum_p_at_k = tf.reduce_sum((tf.cast(p_at_k, tf.float32) * tf.cast(mask_at_k, tf.float32)),  axis=1)
+            t_cut = tf.fill((1, num_samples), cut_at_k)
+            num_added_cut_k = tf.minimum(tf.cast(t_cut, tf.float32), tf.cast(num_added, tf.float32))
+            num_added_cut_k = tf.maximum(num_added_cut_k, tf.cast(tf.fill((1, num_samples), 1), tf.float32))
+            #AP = tf.cast(sum_p_at_k, tf.float32)/tf.cast(num_added_cut_k, tf.float32)
+            AP = tf.cast(sum_p_at_k, tf.float32)/tf.cast(cut_at_k, tf.float32)
+            self.MAP = tf.reduce_mean(AP)
+            tf.summary.scalar('MAP', self.MAP)
+        else:
+            self.MAP = tf.constant(0)
         
         #Add summaries
-        tf.summary.scalar('MAP', self.MAP)
         tf.summary.scalar('loss', self.loss)
-        tf.summary.scalar('accuracy', self.accuracy)
+        tf.summary.histogram('W_out', self.weights['out'])
+        if self.parameters['embedding_size'] > 0:
+            tf.summary.histogram('W_emb', self.weights['emb'])
         
         
         self.init = tf.global_variables_initializer()
         
     def train(self, ds):
-    
+
+        actual_epoch = 0
         train_loss_list = []
         val_loss_list = []
         dropout_keep_prob = 1 - self.parameters['dropout']
-        display_step = 10
-        checkpoint_freq_step = 20
+        display_step = 50
+        checkpoint_freq_step = 50
         #max_steps = 30000000
         #max_steps = 600000
         # Create a saver.
@@ -290,9 +334,11 @@ class RNN_dynamic:
             # Keep training until reach max iterations
             while step * self.parameters['batch_size'] < self.parameters['max_steps']:
                 total_iterations = step * self.parameters['batch_size']
-                
-                #Obtain batch for this iteration
-                batch_x, batch_y = ds.next_batch(self.parameters['batch_size'])
+
+                # Obtain batch for this iteration
+                batch_x, batch_y, new_epoch = ds.next_batch(self.parameters['batch_size'])
+                if new_epoch:
+                    actual_epoch += 1
                 '''
                 print('Start')
                 outputs, weights, biases = sess.run([self.outputs, self.weights, self.biases], feed_dict={self.x: batch_x, self.y: batch_y})
@@ -378,43 +424,44 @@ class RNN_dynamic:
                               "{:.6f}".format(val_map))
                     elif ds._name_dataset.lower() == 'movielens':
                         if b_val_in_batches: # Do for only one batch
-                            #Obtain val batch for this iteration
-                            batch_x_val, batch_y_val = ds.next_batch(self.parameters['batch_size'])
-                            self.val_loss, val_map, summary = sess.run([self.loss, self.MAP, merged], feed_dict={self.x:batch_x_val, self.y:batch_y_val, self.dropout_keep_prob: 1})
-                            val_writer.add_summary(summary, total_iterations)
-                            print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
-                                  "{:.6f}".format(self.val_loss) + ", Validation Map= " + 
-                                  "{:.6f}".format(val_map))
-                            val_loss_list.append(self.val_loss)
-                            print("Iter "+ str(total_iterations) + ", mean last 10 validation loss: " + str(np.mean(val_loss_list[-10:])))
-                        else:  # Do for the whole validation set in batches
-                            val_loss_list = []
-                            val_map_list = []
-                            val_batch_size = 100
-                            start = 0
-                            end = start + val_batch_size
-                            while end < len(ds._X_val):
-                                x_val_batch = [x.toarray() for x in ds._X_val[start:end]]
-                                y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:end]]
-                                start = end
+                            if False: #TODO FIX: is giving exception this block when new epoch
+                                # Compute for the whole validation set (in batches)
+                                val_loss_list = []
+                                val_batch_size = 100
+                                start = 0
                                 end = start + val_batch_size
-                                val_loss, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
-                                val_writer.add_summary(summary, total_iterations)
+                                while end < len(ds._X_val):
+                                    x_val_batch = [x.toarray() for x in ds._X_val[start:end]]
+                                    y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in
+                                                   ds._Y_val[start:end]]
+                                    start = end
+                                    end = start + val_batch_size
+                                    val_loss = sess.run(
+                                        [self.loss],feed_dict={self.x: x_val_batch, self.y: y_val_batch,
+                                                   self.dropout_keep_prob: 1})
+                                    val_loss_list.append(val_loss)
+                                # Do the last batch
+                                x_val_batch = [x.toarray() for x in ds._X_val[start:]]
+                                y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:]]
+                                val_loss = sess.run([self.loss], feed_dict={self.x: x_val_batch,
+                                                                                 self.y: y_val_batch,
+                                                                                 self.dropout_keep_prob: 1})
                                 val_loss_list.append(val_loss)
-                                val_map_list.append(val_map)
-                            # Do the last batch y.toarray().reshape(y.toarray().shape[1]
-                            x_val_batch = [x.toarray() for x in ds._X_val[start:]]
-                            y_val_batch = [y.toarray().reshape(y.toarray().shape[1]) for y in ds._Y_val[start:]]
-                            val_loss, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:x_val_batch, self.y:y_val_batch, self.dropout_keep_prob: 1})
-                            val_writer.add_summary(summary, total_iterations)
-                            val_loss_list.append(val_loss)
-                            val_map_list.append(val_map)
-                            # Compute mean of bathces val loss
-                            self.val_loss = np.mean(val_loss_list)
-                            val_map = np.mean(val_map)
-                            print("Iter " + str(total_iterations) + ", Validation  Loss= " + 
-                                  "{:.6f}".format(self.val_loss) + ", Validation Map= " + 
-                                  "{:.6f}".format(val_map))
+                                # Compute mean of bathces val loss
+                                self.val_loss = np.mean(val_loss_list)
+                                val_map = np.mean(val_map)
+                                print("Epoch " + str(actual_epoch) + ", Validation  Loss= " +
+                                      "{:.6f}".format(self.val_loss))
+                            else:
+                                # Obtain val batch for this iteration
+                                batch_x_val, batch_y_val = ds.next_batch_val(self.parameters['batch_size'])
+                                self.val_loss, summary = sess.run([self.loss, merged], feed_dict={self.x:batch_x_val, self.y:batch_y_val, self.dropout_keep_prob: 1})
+                                val_writer.add_summary(summary, total_iterations)
+                                print("Iter " + str(total_iterations) + ", Validation  Loss= " +
+                                      "{:.6f}".format(self.val_loss))
+                                val_loss_list.append(self.val_loss)
+                                print("Iter "+ str(total_iterations) + ", mean last 25 validation loss: " + str(np.mean(val_loss_list[-25:])))
+
                     # Calculate test loss
                     if len(ds._X_local_test) > 0:
                         self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
@@ -424,14 +471,22 @@ class RNN_dynamic:
                               "{:.6f}".format(test_acc) + ", Test Map= " + 
                               "{:.6f}".format(test_map))
 
-                    
-                    #If best loss save the model as best model so far
-                    if self.val_loss < self.best_loss:
-                        self.best_loss = self.val_loss
-                        checkpoint_dir_tmp = checkpoint_dir + '/best_model/'
-                        checkpoint_path = os.path.join(checkpoint_dir_tmp, 'model_best.ckpt')
-                        saver_best.save(sess, checkpoint_path, global_step=total_iterations)
-                        self.best_model_path = 'model_best.ckpt-' + str(total_iterations)
+                    # If best loss save the model as best model so far
+                    if b_val_in_batches and ds._name_dataset.lower() == 'movielens':
+                        if np.mean(val_loss_list[-25:]) < self.best_loss:
+                            self.best_loss = np.mean(val_loss_list[-25:])
+                            checkpoint_dir_tmp = checkpoint_dir + '/best_model/'
+                            checkpoint_path = os.path.join(checkpoint_dir_tmp, 'model_best.ckpt')
+                            saver_best.save(sess, checkpoint_path, global_step=total_iterations)
+                            self.best_model_path = 'model_best.ckpt-' + str(total_iterations)
+                            # print('-->save best model: ' + str(checkpoint_path) + ' - step: ' + str(step) + ' best_model_path: ' + str(self.best_model_path))
+                    else:
+                        if self.val_loss < self.best_loss:
+                            self.best_loss = self.val_loss
+                            checkpoint_dir_tmp = checkpoint_dir + '/best_model/'
+                            checkpoint_path = os.path.join(checkpoint_dir_tmp, 'model_best.ckpt')
+                            saver_best.save(sess, checkpoint_path, global_step=total_iterations)
+                            self.best_model_path = 'model_best.ckpt-' + str(total_iterations)
                     print('------------------------------------------------')
                     sys.stdout.flush()
                     

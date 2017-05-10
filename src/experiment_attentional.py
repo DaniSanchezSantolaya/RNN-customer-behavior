@@ -21,13 +21,8 @@ random.seed(17)
 np.random.seed(17)
 
 
-#python experiment.py representation max_interactions padding b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle ks time_column embedding_size attentional_layer
-#python experiment.py 4 10 right False 0.2 adam 0.0001 64 128 lstm 1 0.1 0.0 sigmoid 40000 True [2,3,4,5,6,7] num_month
-#python experiment.py 4 5 left True 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7] num_month
-#python experiment.py 4 5 left False 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7] time_from_last_interaction
-#python experiment.py 4 6 right True 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 1000000 True [2,3,4,5,6,7] time_from_last_interaction
-#python experiment_attentional.py 5 10 right True 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 10000 True [2,3,4,5,6,7] time_from_last_interaction 16 embedding
-
+#python experiment.py representation max_interactions padding b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle ks time_column embedding_size attentional_layer init_stdev
+#python experiment_attentional.py 5 10 right True 0.1 adam 0.0001 128 128 lstm 1 0.1 0.0 sigmoid 10000 True [2,3,4,5,6,7] time_from_last_interaction 16 embedding 0.1
 start = time.time()
 
 
@@ -85,6 +80,7 @@ if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 
     model_parameters['padding'] = padding
     model_parameters['embedding_size'] = 16
     model_parameters['attentional_layer'] = 'embedding'
+    model_parameters['init_stdev'] = 0.01
 
     load_df_pickle = True
     k = 7
@@ -115,6 +111,7 @@ else:
     model_parameters['padding'] = padding
     model_parameters['embedding_size'] = int(sys.argv[19])
     model_parameters['attentional_layer'] = str(sys.argv[20])
+    model_parameters['init_stdev'] = float(sys.argv[21])
 
     load_df_pickle = sys.argv[16]
     ks =  ast.literal_eval(sys.argv[17])
@@ -147,6 +144,7 @@ print('max_steps: ' + str(model_parameters['max_steps']))
 print('load_df_pickle: ' + str(load_df_pickle))
 print('embedding_size: ' + str(model_parameters['embedding_size']))
 print('attentional_layer: ' + str(model_parameters['attentional_layer']))
+print('init_stdev: ' + str(model_parameters['init_stdev']))
 
 
 #### Load pickle

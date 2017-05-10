@@ -13,6 +13,7 @@ min_seq_length = 5
 max_seq_length = 100
 
 
+movies_min_ratings = 20
 
 
 if load_pickle:
@@ -37,12 +38,18 @@ else:
   
 
 # Filter out movies with less than X ratings
-filter_movies = df_date.movieId.value_counts()[(df_date.movieId.value_counts() > 10)].index.values
+filter_movies = df_date.movieId.value_counts()[(df_date.movieId.value_counts() > movies_min_ratings)].index.values
 df_date = df_date[df_date.movieId.isin(filter_movies)]
 print('Total number of ratings:' + str(len(df_date)))
 print('Number of different users: ' + str(len(df_date['userId'].unique())))
 print('Number of different movies: ' + str(len(df_date['movieId'].unique())))
 sys.stdout.flush()
+# Filter out users with less than X ratings
+filter_users = df_date['userId'].value_counts()[(df_date['userId'].value_counts() >= min_seq_length)].index.values
+df_date = df_date[df_date.userId.isin(filter_users)]
+print('Total number of ratings:' + str(len(df_date)))
+print('Number of different users: ' + str(len(df_date['userId'].unique())))
+print('Number of different movies: ' + str(len(df_date['movieId'].unique())))
 
 # Build array mapping movie_id --> position in one-hot encoding
 movieIds = np.zeros(max(df_date['movieId'].unique()) + 1, np.uint16)
@@ -56,8 +63,7 @@ for movieId in df_date['movieId'].unique():
 
 dtype_sparse = np.int8
 
-min_seq_length = 5
-max_seq_length = 100
+
 seq_lengths = []
 num_diff_items = len(df_date.movieId.unique())
 grouped = df_date.groupby('userId')
@@ -123,13 +129,15 @@ for name, group in grouped:
         print('Num training samples: ' + str(len(X_train)))
         sys.stdout.flush()
 
+print('Num train samples: ' + str(len(X_train)))
+print('Num test samples: ' + str(len(X_test)))
         
 # Save pickles
-with open("pickles/movielens/discarded_users_" + str(max_seq_length) + "_2009_filter10.pickle", 'wb') as handle:
+with open("pickles/movielens/discarded_users_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
     pickle.dump(discarded_users, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/user_train_" + str(max_seq_length) + "_2009_filter10.pickle", 'wb') as handle:
+with open("pickles/movielens/user_train_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
     pickle.dump(user_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/user_test_" + str(max_seq_length) + "_2009_filter10.pickle", 'wb') as handle:
+with open("pickles/movielens/user_test_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
     pickle.dump(user_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
 df_date = []
 df = []
@@ -138,18 +146,18 @@ discarded_users = []
 user_train = []
 user_test = []
 gc.collect()
-with open("pickles/movielens/X_test_" + str(max_seq_length) + "_2009_filter10.pickle", 'wb') as handle:
+with open("pickles/movielens/X_test_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
     pickle.dump(X_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/Y_test_" + str(max_seq_length) + "_2009_filter10.pickle", 'wb') as handle:
+with open("pickles/movielens/Y_test_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
     pickle.dump(Y_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
 X_test = []
 Y_test = []
 gc.collect()
-with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_2009_filter10.pickle", 'wb') as handle:
+with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
     pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
 Y_train = []
 gc.collect()
-with open("pickles/movielens/X_train_" + str(max_seq_length) + "_2009_filter10.pickle", 'wb') as handle:
+with open("pickles/movielens/X_train_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
     pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
 print('Saved pickles!')
 

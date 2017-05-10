@@ -104,9 +104,9 @@ print('embedding_size: ' + str(model_parameters['embedding_size']))
 
 #### Load train pickle
 
-with open("pickles/movielens/X_train_" + str(max_interactions) + ".pickle", 'rb') as handle:
+with open("pickles/movielens/X_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
     X_train = pickle.load(handle)
-with open("pickles/movielens/Y_train_" + str(max_interactions) + ".pickle", 'rb') as handle:
+with open("pickles/movielens/Y_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
     Y_train = pickle.load(handle)
 
 X_train = np.array(X_train)
