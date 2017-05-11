@@ -60,7 +60,8 @@ class RNN_dynamic:
         }
         if self.parameters['embedding_size'] > 0:
             self.weights['emb'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']], stddev=self.parameters['init_stdev']), name='w_emb')
-        
+            if self.parameters['embedding_activation'] != 'linear':
+                self.biases['emb'] = tf.Variable(tf.random_normal([self.parameters['embedding_size']]), name='b_emb')
 
         # Define a lstm cell with tensorflow
         if self.parameters['rnn_type'].lower() == 'lstm':
@@ -88,7 +89,12 @@ class RNN_dynamic:
         
         if self.parameters['embedding_size'] > 0:   
             self.x_reshaped = tf.reshape(self.x, [-1, int(self.x.get_shape()[2])])
-            v = tf.matmul(self.x_reshaped, self.weights['emb'])
+            if self.parameters['embedding_activation'] == 'linear':
+                v = tf.matmul(self.x_reshaped, self.weights['emb'])
+            elif self.parameters['embedding_activation'] == 'tanh':
+                v = tf.tanh(tf.matmul(self.x_reshaped, self.weights['emb']) + self.biases['emb'])
+            elif self.parameters['embedding_activation'] == 'sigmoid':
+                v = tf.sigmoid(tf.matmul(self.x_reshaped, self.weights['emb']) + self.biases['emb'])
             v_reshaped = tf.reshape(v, [-1, self.parameters['seq_length'], self.parameters['embedding_size']])
             #if self.parameters['dropout'] > 0:
                 #tf.nn.dropout(v_reshaped, (1 - self.dropout_rate)) # Check

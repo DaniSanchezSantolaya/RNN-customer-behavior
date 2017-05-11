@@ -17,9 +17,8 @@ random.seed(17)
 random.seed(17)
 np.random.seed(17)
 
-#python experiment_movielens_attentional.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps max_steps embedding_size attentional_layer 
-#python experiment_movielens_attentional.py 100 right 0.03 adam 0.01 50 128 lstm2 1 0.2 0 softmax 4000000 50 hidden_state > movielens_attentional.txt
-#ubuntu@packer-ubuntu-16:~$ python3.5 experiment_movielens_attentional.py 100 right 0.025 adam 0.01 50 128 lstm2 1 0.2 0 softmax 10000000 50 hidden_state > movielens_attentional.txt
+#python experiment_movielens_attentional.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps max_steps embedding_size attentional_layer embedding_activation attention_weights_activation
+
 
 
 start = time.time()
@@ -53,6 +52,8 @@ if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 
     model_parameters['padding'] = padding
     model_parameters['embedding_size'] = 16
     model_parameters['attentional_layer'] = 'embedding'
+    model_parameters['embedding_activation'] = 'linear'
+    model_parameters['attention_weights_activation'] = 'linear'
 
 
 else:
@@ -79,6 +80,8 @@ else:
     model_parameters['padding'] = padding
     model_parameters['embedding_size'] = int(sys.argv[14])
     model_parameters['attentional_layer'] = str(sys.argv[15])
+    model_parameters['embedding_activation'] = str(sys.argv[16])
+    model_parameters['attention_weights_activation'] = str(sys.argv[23])
 
 
 

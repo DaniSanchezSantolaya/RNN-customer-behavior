@@ -69,8 +69,8 @@ def evaluate_sample(predictions, y_true, k):
     actual_pos = 0
     for i in range(k):
         if sorted_idx[i] in y_true_idx:
-            actual_pos += 1
-        sum_precisions += actual_pos/float(i+1)
+            actual_pos += 1 #CHECK THIS!! IT MAY BE NOT CORRECT
+            sum_precisions += actual_pos/float(i+1)
     ap_k = sum_precisions/min(k, len(y_true))
     
     return recall_user_k, sps_k, ap_k, num_pos_k, total_pos

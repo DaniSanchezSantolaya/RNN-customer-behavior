@@ -21,7 +21,7 @@ random.seed(17)
 np.random.seed(17)
 
 
-#python experiment.py representation max_interactions padding b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle ks time_column init_stdev
+#python experiment.py representation max_interactions padding b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle ks time_column init_stdev embedding_activation
 #python experiment.py 4 10 right False 0.2 adam 0.0001 64 128 lstm 1 0.1 0.0 sigmoid 40000 True [2,3,4,5,6,7] num_month
 #python experiment.py 4 5 left True 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7] num_month
 #python experiment.py 4 5 left False 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7] time_from_last_interaction
@@ -84,6 +84,7 @@ if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 
     model_parameters['max_steps'] = 30000
     model_parameters['padding'] = padding
     model_parameters['init_stdev'] = 0.01
+    model_parameters['embedding_activation'] = 'linear'
 
     load_df_pickle = True
     k = 7
@@ -113,6 +114,7 @@ else:
     model_parameters['max_steps'] = int(sys.argv[15])
     model_parameters['padding'] = padding
     model_parameters['init_stdev'] = float(sys.argv[19])
+    model_parameters['embedding_activation'] = str(sys.argv[20])
 
     load_df_pickle = sys.argv[16]
     ks =  ast.literal_eval(sys.argv[17])

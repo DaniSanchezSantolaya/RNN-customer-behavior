@@ -72,7 +72,9 @@ class RNN_dynamic:
 
         if self.parameters['embedding_size'] > 0:
             self.weights['emb'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']], stddev=self.parameters['init_stdev']), name='w_emb')
-            
+            if self.parameters['embedding_activation'] != 'linear':
+                self.biases['emb'] = tf.Variable(tf.random_normal([self.parameters['embedding_size']]), name='b_emb')
+
         self.biases = {
             'out': tf.Variable(tf.random_normal([self.parameters['n_output']]), name='b_out'),
             'alphas': tf.Variable(tf.random_normal([1]), name='b_alphas')
@@ -106,7 +108,12 @@ class RNN_dynamic:
         #if self.parameters['attentional_layer'] == 'embedding':
         if self.parameters['embedding_size'] > 0:
             self.x_reshaped = tf.reshape(self.x, [-1, int(self.x.get_shape()[2])])
-            v = tf.matmul(self.x_reshaped, self.weights['emb'])
+            if self.parameters['embedding_activation'] == 'linear':
+                v = tf.matmul(self.x_reshaped, self.weights['emb'])
+            elif self.parameters['embedding_activation'] == 'tanh':
+                v = tf.tanh(tf.matmul(self.x_reshaped, self.weights['emb']) + self.biases['emb'])
+            elif self.parameters['embedding_activation'] == 'sigmoid':
+                v = tf.sigmoid(tf.matmul(self.x_reshaped, self.weights['emb']) + self.biases['emb'])
             v_reshaped = tf.reshape(v, [-1, self.parameters['seq_length'], self.parameters['embedding_size']])
             outputs, states = tf.nn.dynamic_rnn(
                 rnn_cell,
@@ -144,6 +151,10 @@ class RNN_dynamic:
         #print(biases['alphas'].get_shape())
         #print('--------------------')
         self.ejs = tf.matmul(self.outputs_reshaped, self.weights['alphas']) + self.biases['alphas'] #Check
+        if self.parameters['attention_weights_activation'] == 'tanh':
+            self.ejs = tf.tanh(self.ejs)
+        if self.parameters['attention_weights_activation'] == 'sigmoid':
+            self.ejs = tf.sigmoid(self.ejs)
         #print('self.ejs:')
         #print(self.ejs.get_shape())
         
@@ -172,7 +183,7 @@ class RNN_dynamic:
             #self.last_relevant_output = outputs[:,-1,:]
         #logits = tf.matmul(self.last_relevant_output, weights['out']) + biases['out']
         
-        logits = tf.matmul(self.context_reduced, self.weights['out']) + self.biases['out']
+        self.logits = tf.matmul(self.context_reduced, self.weights['out']) + self.biases['out']
 
 
         
@@ -180,11 +191,11 @@ class RNN_dynamic:
         #self._debug = outputs
 
         if self.parameters['type_output'].lower() == 'sigmoid':
-            self.pred_prob = tf.sigmoid(logits)
-            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits, self.y))
+            self.pred_prob = tf.sigmoid(self.logits)
+            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.logits, self.y))
         else:
             self.pred_prob = tf.nn.softmax(logits)
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=self.y))
+            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.y))
             
 
         #Add L2 regularizatoin loss
@@ -507,8 +518,60 @@ class RNN_dynamic:
             # Calculate val loss
             #self.val_loss, val_acc, val_map = sess.run([self.loss, self.accuracy, self.MAP], feed_dict={self.x: ds._X_val, self.y: ds._Y_val})
             #print('Final validation loss: ' + str(self.val_loss) + ', Validation accuracy: ' + str(val_acc) + ', Validation MAP: ' + str(val_map))
-            
-    def predict(self, X_test, checkpoint_path = None, num_test_splits = 1):
+
+    def predict(self, X_test, checkpoint_path=None, num_test_splits=1):
+        # Make predictions for test set with the best model
+        if checkpoint_path is None:
+            checkpoint_dir = './checkpoints/' + self.parameters_str
+            # CHECK: is removing the best model sometimes
+            if self.best_loss < self.val_loss:
+                checkpoint_dir_tmp = checkpoint_dir + '/best_model/'
+                checkpoint_path = os.path.join(checkpoint_dir_tmp, self.best_model_path)
+            else:
+                checkpoint_dir_tmp = checkpoint_dir + '/last_model/'
+                checkpoint_path = os.path.join(checkpoint_dir_tmp, self.last_model_path)
+
+        saver = tf.train.Saver()
+
+        # checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
+        with tf.Session() as sess:
+            print('load model: ' + str(checkpoint_path))
+            saver.restore(sess, checkpoint_path)
+
+            # pred_test = []
+            pred_test = np.zeros((len(X_test), self.parameters['n_output']))
+            # num_test_splits = 1 #Split to fit in memory when using large network architectures
+            test_split_size = int(len(X_test) / num_test_splits)
+            for i in range(num_test_splits):
+                initial_idx = i * test_split_size
+                final_idx = (i + 1) * test_split_size
+                # print('Initial index: ' + str(initial_idx))
+                # print('final_idx index: ' + str(final_idx))
+                if i < (num_test_splits - 1):
+                    logits, pred_test_split = sess.run([self.logits, self.pred_prob],
+                                                       feed_dict={self.x: X_test[initial_idx:final_idx],
+                                                                  self.dropout_keep_prob: 1})
+                    # print(pred_test_split.shape)
+                    pred_test[initial_idx:final_idx] = pred_test_split
+                else:
+                    logits, pred_test_split = sess.run([self.logits, self.pred_prob],
+                                                       feed_dict={self.x: X_test[initial_idx:],
+                                                                  self.dropout_keep_prob: 1})
+                    # print(pred_test_split.shape)
+                    pred_test[initial_idx:] = pred_test_split
+                    # pred_test.append(pred_test_split)
+
+                    # pred_test = sess.run(self.pred_prob, feed_dict={x: X_test})
+
+                    # print(pred_test[0].shape)
+                    # pred_test = np.array(pred_test)
+                    # print(pred_test.shape)
+                    # pred_test = pred_test.reshape((len(X_test), self.parameters['n_output']))
+
+        return logits, pred_test
+
+
+    def predict2(self, X_test, checkpoint_path = None, num_test_splits = 1):
         #Make predictions for test set with the best model
         if checkpoint_path is None:
             checkpoint_dir = './checkpoints/' + self.parameters_str
