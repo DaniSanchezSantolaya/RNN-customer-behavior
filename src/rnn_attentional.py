@@ -62,18 +62,22 @@ class RNN_dynamic:
         self.weights = {
             'alphas': tf.Variable(tf.random_normal([self.parameters['n_hidden'], 1], stddev=self.parameters['init_stdev']))
         }
+        print('Defined alpha weights')
         
         if self.parameters['attentional_layer'] == 'hidden_state':
             self.weights['out'] = tf.Variable(tf.random_normal([self.parameters['n_hidden'], self.parameters['n_output']], stddev=self.parameters['init_stdev']), name='w_out')
+            print('Defined weights from hidden to output')
         elif self.parameters['attentional_layer'] == 'input':
             self.weights['out'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['n_output']], stddev=self.parameters['init_stdev']), name='w_out')
         elif self.parameters['attentional_layer'] == 'embedding':
             self.weights['out'] = tf.Variable(tf.random_normal([self.parameters['embedding_size'], self.parameters['n_output']], stddev=self.parameters['init_stdev']), name='w_out')
+            print('Defined weights from embedding to output')
 
         if self.parameters['embedding_size'] > 0:
             self.weights['emb'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']], stddev=self.parameters['init_stdev']), name='w_emb')
             if self.parameters['embedding_activation'] != 'linear':
                 self.biases['emb'] = tf.Variable(tf.random_normal([self.parameters['embedding_size']]), name='b_emb')
+            print('Defined embedding weights')
 
         self.biases = {
             'out': tf.Variable(tf.random_normal([self.parameters['n_output']]), name='b_out'),
@@ -110,10 +114,13 @@ class RNN_dynamic:
             self.x_reshaped = tf.reshape(self.x, [-1, int(self.x.get_shape()[2])])
             if self.parameters['embedding_activation'] == 'linear':
                 v = tf.matmul(self.x_reshaped, self.weights['emb'])
+                print('Defined linear embedding')
             elif self.parameters['embedding_activation'] == 'tanh':
                 v = tf.tanh(tf.matmul(self.x_reshaped, self.weights['emb']) + self.biases['emb'])
+                print('Defined tanh embedding')
             elif self.parameters['embedding_activation'] == 'sigmoid':
                 v = tf.sigmoid(tf.matmul(self.x_reshaped, self.weights['emb']) + self.biases['emb'])
+                print('Defined sigmoid embedding')
             v_reshaped = tf.reshape(v, [-1, self.parameters['seq_length'], self.parameters['embedding_size']])
             outputs, states = tf.nn.dynamic_rnn(
                 rnn_cell,
@@ -153,8 +160,12 @@ class RNN_dynamic:
         self.ejs = tf.matmul(self.outputs_reshaped, self.weights['alphas']) + self.biases['alphas'] #Check
         if self.parameters['attention_weights_activation'] == 'tanh':
             self.ejs = tf.tanh(self.ejs)
+            print('Defined tanh ejs')
         if self.parameters['attention_weights_activation'] == 'sigmoid':
             self.ejs = tf.sigmoid(self.ejs)
+            print('Defined sigmoid ejs')
+        else:
+            print('Defined linear ejs')
         #print('self.ejs:')
         #print(self.ejs.get_shape())
         
@@ -166,12 +177,15 @@ class RNN_dynamic:
         
         #Obtain context vector c
         if self.parameters['attentional_layer'] == 'hidden_state':
-            self.context = self.reshaped_alphas * self.outputs_reshaped #TODO: Try also to multiply with input (or embedding as they do in the paper)
+            self.context = self.reshaped_alphas * self.outputs_reshaped
+            print('Defined context from hidden_state')
         elif self.parameters['attentional_layer'] == 'input':
             self.x_reshaped = tf.reshape(self.x, [-1, int(self.x.get_shape()[2])])
             self.context = self.reshaped_alphas * self.x_reshaped
+            print('Defined context from input')
         elif self.parameters['attentional_layer'] == 'embedding':
             self.context = self.reshaped_alphas * v
+            print('Defined context from embeddings')
         self.context_reshaped = tf.reshape(self.context, [-1, self.parameters['seq_length'], int(self.context.get_shape()[1])])
         self.context_reduced = tf.reduce_sum(self.context_reshaped, axis= 1)
         
@@ -194,7 +208,7 @@ class RNN_dynamic:
             self.pred_prob = tf.sigmoid(self.logits)
             self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.logits, self.y))
         else:
-            self.pred_prob = tf.nn.softmax(logits)
+            self.pred_prob = tf.nn.softmax(self.logits)
             self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.y))
             
 

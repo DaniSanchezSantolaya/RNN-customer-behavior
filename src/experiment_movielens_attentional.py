@@ -17,7 +17,7 @@ random.seed(17)
 random.seed(17)
 np.random.seed(17)
 
-#python experiment_movielens_attentional.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps max_steps embedding_size attentional_layer embedding_activation attention_weights_activation
+#python experiment_movielens_attentional.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps max_steps embedding_size attentional_layer embedding_activation attention_weights_activation type_input input_embedding_size
 
 
 
@@ -29,7 +29,7 @@ def str2bool(v):
   return v.lower() in ("yes", "true", "t", "1")
 
 
-if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 right True 0.1 adam 0.0001 16 128 lstm2 1 0.1 0.01 sigmoid 30000 True
+if len(sys.argv) < 2:
 
     max_interactions = 100
     padding = 'right'
@@ -54,11 +54,12 @@ if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 
     model_parameters['attentional_layer'] = 'embedding'
     model_parameters['embedding_activation'] = 'linear'
     model_parameters['attention_weights_activation'] = 'linear'
+    model_parameters['type_input'] = 'one-hot'
+    model_parameters['input_embedding_size'] = 0
 
 
 else:
-#python experiment_movielens.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps 
-#python experiment_movielens.py 100 right 0.15 adam 0.001 50 128 lstm2 1 0.1 0 softmax 40000 
+
     #Representation parameters
     max_interactions = int(sys.argv[1])
     padding = sys.argv[2]
@@ -81,7 +82,9 @@ else:
     model_parameters['embedding_size'] = int(sys.argv[14])
     model_parameters['attentional_layer'] = str(sys.argv[15])
     model_parameters['embedding_activation'] = str(sys.argv[16])
-    model_parameters['attention_weights_activation'] = str(sys.argv[23])
+    model_parameters['attention_weights_activation'] = str(sys.argv[17])
+    model_parameters['type_input'] = sys.argv[18]
+    model_parameters['input_embedding_size'] = sys.argv[19]
 
 
 
@@ -103,14 +106,23 @@ print('type_output: ' + str(model_parameters['type_output']))
 print('max_steps: ' + str(model_parameters['max_steps']))
 print('embedding_size: ' + str(model_parameters['embedding_size']))
 print('attentional_layer: ' + str(model_parameters['attentional_layer']))
+print('type_input: ' + str(model_parameters['type_input']))
 
 
 #### Load train pickle
 
-with open("pickles/movielens/X_train_" + str(max_interactions) + ".pickle", 'rb') as handle:
-    X_train = pickle.load(handle)
-with open("pickles/movielens/Y_train_" + str(max_interactions) + ".pickle", 'rb') as handle:
-    Y_train = pickle.load(handle)
+#### Load train pickle
+if model_parameters['type_input'] == 'one-hot':
+    with open("pickles/movielens/X_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
+        X_train = pickle.load(handle)
+    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
+        Y_train = pickle.load(handle)
+elif model_parameters['type_input'] == 'embeddings':
+    with open("pickles/movielens/X_train_" + str(max_interactions) + "_embeddings_" + str(model_parameters['input_embedding_size']) + "_2009_filter20.pickle", 'rb') as handle:
+        X_train = pickle.load(handle)
+    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_embeddings_" + str(model_parameters['input_embedding_size']) + "_2009_filter20.pickle", 'rb') as handle:
+        Y_train = pickle.load(handle)
+
 
 X_train = np.array(X_train)
 Y_train = np.array(Y_train)

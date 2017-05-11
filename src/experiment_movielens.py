@@ -17,9 +17,9 @@ random.seed(17)
 random.seed(17)
 np.random.seed(17)
 
-#python experiment_movielens.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps init_stdev embedding_size
-#python experiment_movielens.py 100 right 0.03 adam 0.01 50 128 lstm2 1 0.2 0 softmax 4000000 0.1 0 > movielens.txt
-#ubuntu@packer-ubuntu-16:~$ python3.5 experiment_movielens.py 100 right 0.025 adam 0.01 50 128 lstm2 1 0.2 0 softmax 10000000 0.1 0 > movielens.txt
+#python experiment_movielens.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps init_stdev embedding_size embedding_activation type_input input_embedding_size
+#python experiment_movielens.py 100 right 0.03 adam 0.01 50 128 lstm2 1 0.2 0 softmax 4000000 0.1 0 linear one-hot > movielens.txt
+#ubuntu@packer-ubuntu-16:~$ python3.5 experiment_movielens.py 100 right 0.025 adam 0.01 50 128 lstm2 1 0.2 0 softmax 10000000 0.1 0 linear one-hot > movielens.txt
 
 
 start = time.time()
@@ -30,7 +30,7 @@ def str2bool(v):
   return v.lower() in ("yes", "true", "t", "1")
 
 
-if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 right True 0.1 adam 0.0001 16 128 lstm2 1 0.1 0.01 sigmoid 30000 True
+if len(sys.argv) < 2:
 
     max_interactions = 100
     padding = 'right'
@@ -53,6 +53,9 @@ if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 
     model_parameters['padding'] = padding
     model_parameters['init_stdev'] = 1
     model_parameters['embedding_size'] = 0
+    model_parameters['embedding_activation'] = 'linear'
+    model_parameters['type_input'] = 'one-hot'
+    model_parameters['input_embedding_size'] = 0
     
 
 
@@ -78,6 +81,9 @@ else:
     model_parameters['padding'] = padding
     model_parameters['init_stdev'] = float(sys.argv[14])
     model_parameters['embedding_size'] = int(sys.argv[15])
+    model_parameters['embedding_activation'] = sys.argv[16]
+    model_parameters['type_input'] = sys.argv[17]
+    model_parameters['input_embedding_size'] = sys.argv[18]
     
 
 
@@ -100,14 +106,22 @@ print('type_output: ' + str(model_parameters['type_output']))
 print('max_steps: ' + str(model_parameters['max_steps']))
 print('init_stdev: ' + str(model_parameters['init_stdev']))
 print('embedding_size: ' + str(model_parameters['embedding_size']))
+print('embedding_activation: ' + str(model_parameters['embedding_activation']))
+print('type_input: ' + str(model_parameters['type_input']))
+print('input_embedding_size: ' + str(model_parameters['input_embedding_size']))
 
 
 #### Load train pickle
-
-with open("pickles/movielens/X_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
-    X_train = pickle.load(handle)
-with open("pickles/movielens/Y_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
-    Y_train = pickle.load(handle)
+if model_parameters['type_input'] == 'one-hot':
+    with open("pickles/movielens/X_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
+        X_train = pickle.load(handle)
+    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
+        Y_train = pickle.load(handle)
+elif model_parameters['type_input'] == 'embeddings':
+    with open("pickles/movielens/X_train_" + str(max_interactions) + "_embeddings_" + str(model_parameters['input_embedding_size']) + "_2009_filter20.pickle", 'rb') as handle:
+        X_train = pickle.load(handle)
+    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_embeddings_" + str(model_parameters['input_embedding_size']) + "_2009_filter20.pickle", 'rb') as handle:
+        Y_train = pickle.load(handle)
 
 X_train = np.array(X_train)
 Y_train = np.array(Y_train)
