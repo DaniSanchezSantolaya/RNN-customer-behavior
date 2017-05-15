@@ -6,11 +6,11 @@ import os
 import time
 import sys
 import pickle
-#from rnn_dynamic import *
-from rnn_attentional import * #For the attentional experiment
+from rnn_dynamic import *
+#from rnn_attentional import * #For the attentional experiment
 
 
-representation = 4
+representation = 9
 max_interactions = 20
 padding = 'right'
 aux_features_length = '0'
@@ -23,7 +23,7 @@ with open('pickles/Y_local_test_rep' + str(representation) + '_' + str(max_inter
     Y_test = pickle.load(handle)
 
 
-checkpoint_path = 'checkpoints/rep4-lstm2-128-1-128-adam-20000000-hidden_state-0-20170512-220445/last_model/last_model.ckpt-9836800'
+checkpoint_path = 'checkpoints/rep9-lstm2-128-1-128-adam-200000000-20170515-122036/last_model/last_model.ckpt-6649600'
 
 
 
@@ -66,7 +66,7 @@ array_ordered = np.arange(1, 25)
 def evaluate_sample(predictions, y_true, k):
     global total_no_interactions
     global array_ordered
-    sorted_pred, sorted_y = zip(*sorted(zip(predictions, y_true), reverse=True ))
+    sorted_pred, sorted_y = zip(*sorted(zip(predictions, y_true), reverse=True))
     #Recall at k
     true_pos_k = sum(sorted_y[0:k])
     num_pos = sum(y_true)

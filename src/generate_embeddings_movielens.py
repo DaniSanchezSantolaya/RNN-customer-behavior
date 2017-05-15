@@ -12,23 +12,27 @@ b_output_embeddings = False
 load_pretrained_embeddings = False
 embedding_size = 64
 start_date_embeddings = '2009-01-01'
-start_date_train = '2014-08-01'
+start_date_train = '2009-01-01'
 date_test = '2014-10-01'
 movies_min_ratings = 20
 min_seq_length = 5
 max_seq_length = 100
 word2vec_iter = 10
+num_users_save_train = 100 # Save file every this number of users to avoid consume all the RAM
+year = '2009'
 
 # representation: 1: 1 sample per user, 2: data augmentation, 3: intermediate errors
-representation = 3
+representation = 2
 
 # STEP 1: LOAD PRETRAINED EMBEDDINGS OR TRAIN THEM FROM SCRATCH
 
 if load_pretrained_embeddings:
     word2vec = gensim.models.Word2Vec.load("word2vec_" + str(embedding_size) + ".bin")
+    #word2vec =  gensim.models.KeyedVectors.load_word2vec_format("word2vec_" + str(embedding_size) + ".bin", binary=True)
+    print('Loaded word2vec')
 else:
 
-
+    print('Train embeddings')
 
     # Ratings .dat format: UserID::MovieID::Rating::Timestamp
     user_ids = []
@@ -68,7 +72,7 @@ else:
     word2vec.save("word2vec_" + str(embedding_size) + ".bin")
 
 # STEP 2: CREATE TRAINING SAMPLES USING THE EMBEDDINGS
-
+print('Create training samples')
 # Ratings .dat format: UserID::MovieID::Rating::Timestamp
 user_ids = []
 movie_ids = []
@@ -99,6 +103,7 @@ print('Number of different users: ' + str(len(df_date['userId'].unique())))
 print('Number of different movies: ' + str(len(df_date['movieId'].unique())))
 
 # Build array mapping movie_id --> position in one-hot encoding
+print('Build array mapping movie_id --> position in one-hot encoding')
 movieIds = np.zeros(max(df_date['movieId'].unique()) + 1, np.uint16)
 i = 0
 for movieId in df_date['movieId'].unique():
@@ -117,7 +122,9 @@ Y_test = []
 user_train = []
 user_test = []
 discarded_users = []
+actual_num_file = 0
 i = 0
+print('Generate training samples')
 for name, group in grouped:
 
     # Obtain movies_ids and their embeddings
@@ -152,6 +159,7 @@ for name, group in grouped:
                     y_train = embeddings_train[j]
                     Y_train.append(y_train)
                 user_train.append(name)
+
         elif representation == 3:
             for i in range(0, num_movies_train, max_seq_length):
                 x_start = i
@@ -188,13 +196,23 @@ for name, group in grouped:
             time_idx = np.array(range(0, num_movies_test))
             y_test = np.zeros((num_movies_test, num_diff_items), dtype=np.int8)
             y_test[time_idx, one_hot_pos_test] = 1
-
             X_test.append(x_test)
             Y_test.append(sparse.csr_matrix(y_test, dtype=dtype_sparse))
 
     else:
         discarded_users.append(name)
     i += 1
+    if i % num_users_save_train == 0:
+        with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_embeddings_" + str(
+                embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + ".pickle", 'wb') as handle:
+            pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        Y_train = []
+        with open("pickles/movielens/X_train_" + str(max_seq_length) + "_embeddings_" + str(
+                embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + ".pickle", 'wb') as handle:
+            pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        X_train = []
+        gc.collect()
+        actual_num_file += 1
     if i % 2500 == 0:
         print(i)
         print('Num training samples: ' + str(len(X_train)))
@@ -204,11 +222,11 @@ print('Num train samples: ' + str(len(X_train)))
 print('Num test samples: ' + str(len(X_test)))
 
 # STEP 3: Save pickles
-with open("pickles/movielens/discarded_users_" + str(max_seq_length) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/discarded_users_" + str(max_seq_length) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(discarded_users, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/user_train_" + str(max_seq_length) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/user_train_" + str(max_seq_length) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(user_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/user_test_" + str(max_seq_length) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/user_test_" + str(max_seq_length) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(user_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
 df_date = []
 df = []
@@ -217,18 +235,18 @@ discarded_users = []
 user_train = []
 user_test = []
 gc.collect()
-with open("pickles/movielens/X_test_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/X_test_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(X_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/Y_test_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/Y_test_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(Y_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
 X_test = []
 Y_test = []
 gc.collect()
-with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + ".pickle", 'wb') as handle:
     pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
 Y_train = []
 gc.collect()
-with open("pickles/movielens/X_train_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/X_train_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + ".pickle", 'wb') as handle:
     pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
 print('Saved pickles!')
 

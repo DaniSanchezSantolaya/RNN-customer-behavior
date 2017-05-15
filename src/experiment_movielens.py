@@ -3,7 +3,6 @@ import pandas as pd
 import random
 import pickle
 import os
-from dataset import *
 #from rnn_static import *
 from rnn_dynamic import *
 import tensorflow as tf
@@ -21,6 +20,10 @@ np.random.seed(17)
 #python experiment_movielens.py 100 right 0.03 adam 0.01 50 128 lstm2 1 0.2 0 softmax 4000000 0.1 0 linear one-hot > movielens.txt
 #ubuntu@packer-ubuntu-16:~$ python3.5 experiment_movielens.py 100 right 0.025 adam 0.01 50 128 lstm2 1 0.2 0 softmax 10000000 0.1 0 linear one-hot > movielens.txt
 
+# Change if using dataset dynamic
+num_total_files = 1
+num_validation_file = 4
+year = '2009'
 
 start = time.time()
 
@@ -126,14 +129,14 @@ print('input_embedding_size: ' + str(input_embedding_size))
 
 #### Load train pickle
 if type_input == 'one-hot':
-    with open("pickles/movielens/X_train_" + str(max_interactions) + "_2014_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
+    with open("pickles/movielens/X_train_" + str(max_interactions) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
         X_train = pickle.load(handle)
-    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_2014_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
+    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
         Y_train = pickle.load(handle)
 elif type_input == 'embeddings':
-    with open("pickles/movielens/X_train_" + str(max_interactions) + "_embeddings_" + str(input_embedding_size) + "_2014_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
+    with open("pickles/movielens/X_train_" + str(max_interactions) + "_embeddings_" + str(input_embedding_size) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
         X_train = pickle.load(handle)
-    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_embeddings_" + str(input_embedding_size) + "_2014_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
+    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_embeddings_" + str(input_embedding_size) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
         Y_train = pickle.load(handle)
 
 X_train = np.array(X_train)
@@ -172,7 +175,12 @@ else:
 print('num features: ' + str(model_parameters['n_input']))
 print('seq length: ' + str(model_parameters['seq_length']))
 print('num output: ' + str(model_parameters['n_output']))
-ds = DataSet(X_train, Y_train, X_val, Y_val, [], [], 0, [], [], name_dataset = 'movielens')
+if num_total_files == 1:
+    from dataset import *
+    ds = DataSet(X_train, Y_train, X_val, Y_val, [], [], 0, [], [], name_dataset = 'movielens')
+else:
+    from dataset_dynamic import *
+    ds = DataSet(max_interactions, input_embedding_size, year, representation, num_total_files, num_validation_file, name_dataset='movielens')
 X_train = []
 Y_train = []
 X_val = []

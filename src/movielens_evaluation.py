@@ -10,7 +10,7 @@ from rnn_dynamic import *
 # from rnn_attentional import * #For the attentional experiment
 
 
-checkpoint_path = 'checkpoints/rep0-lstm2-256-1-128-adam-10000000000-20170511-173749/best_model/model_best.ckpt-3072000'
+checkpoint_path = 'checkpoints/rep0-lstm2-256-1-128-adam-10000000000-20170510-145816/last_model/last_model.ckpt-2713600'
 
 max_interactions = 100
 
@@ -36,7 +36,7 @@ model_parameters['padding'] = 'right'
 model_parameters['n_input'] = X_test[0].toarray().shape[1]
 model_parameters['n_output'] = Y_test[0].toarray().shape[1]
 model_parameters['seq_length'] = X_test[0].toarray().shape[0]
-model_parameters['embedding_size'] = 64
+model_parameters['embedding_size'] = 0
 model_parameters['embedding_activation'] = 'linear'
 model_parameters['y_length'] = 1
 # Parameters for the attentional model only

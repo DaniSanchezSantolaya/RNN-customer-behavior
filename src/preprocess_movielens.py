@@ -7,13 +7,13 @@ import sys
 
 load_pickle = False
 
-start_date_train = '2014-09-25'
+start_date_train = '2009-01-01'
 date_test = '2014-10-01'
-min_seq_length = 2
-max_seq_length = 4
+min_seq_length = 5
+max_seq_length = 100
 
 
-movies_min_ratings = 1500 #20
+movies_min_ratings = 20 #20
 
 # representation: 1: 1 sample per user, 2: data augmentation, 3: intermediate errors
 representation = 3
@@ -108,9 +108,9 @@ for name, group in grouped:
                 user_train.append(name)
         elif representation == 3:
             #for i in range(0, num_movies_train, min_seq_length):
-            for i in range(0, num_movies_train, max_seq_length):
-                x_start = i
-                x_end = min(i + max_seq_length, num_movies_train - 1)
+            for j in range(0, num_movies_train, max_seq_length):
+                x_start = j
+                x_end = min(j + max_seq_length, num_movies_train - 1)
                 y_start = x_start + 1
                 y_end = x_end + 1
                 length_sample = x_end - x_start
@@ -153,11 +153,11 @@ print('Num train samples: ' + str(len(X_train)))
 print('Num test samples: ' + str(len(X_test)))
         
 # Save pickles
-with open("pickles/movielens/discarded_users_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/discarded_users_" + str(max_seq_length) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(discarded_users, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/user_train_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/user_train_" + str(max_seq_length) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(user_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/user_test_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/user_test_" + str(max_seq_length) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(user_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
 df_date = []
 df = []
@@ -166,20 +166,18 @@ discarded_users = []
 user_train = []
 user_test = []
 gc.collect()
-with open("pickles/movielens/X_test_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/X_test_" + str(max_seq_length) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(X_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/Y_test_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/Y_test_" + str(max_seq_length) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(Y_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
 X_test = []
 Y_test = []
 gc.collect()
-with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
 Y_train = []
 gc.collect()
-with open("pickles/movielens/X_train_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
+with open("pickles/movielens/X_train_" + str(max_seq_length) + "_2009_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
 print('Saved pickles!')
 
-
-    
