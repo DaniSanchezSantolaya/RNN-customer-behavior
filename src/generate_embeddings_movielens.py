@@ -11,13 +11,13 @@ logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=lo
 b_output_embeddings = False
 load_pretrained_embeddings = False
 embedding_size = 64
-start_date_embeddings = '2014-01-01'
+start_date_embeddings = '2009-01-01'
 start_date_train = '2014-08-01'
 date_test = '2014-10-01'
 movies_min_ratings = 20
 min_seq_length = 5
 max_seq_length = 100
-word2vec_iter = 5
+word2vec_iter = 10
 
 # representation: 1: 1 sample per user, 2: data augmentation, 3: intermediate errors
 representation = 3
@@ -155,9 +155,9 @@ for name, group in grouped:
         elif representation == 3:
             for i in range(0, num_movies_train, max_seq_length):
                 x_start = i
-                x_end = min(i + min_seq_length, num_movies_train - 1)
+                x_end = min(i + max_seq_length, num_movies_train - 1)
                 y_start = x_start + 1
-                y_end = y_start + 1
+                y_end = x_end + 1
                 length_sample = x_end - x_start
                 if length_sample > min_seq_length:
                     x_train = np.zeros((max_seq_length, embedding_size), dtype=np.float32)
