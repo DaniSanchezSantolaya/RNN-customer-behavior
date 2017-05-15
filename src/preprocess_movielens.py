@@ -7,14 +7,16 @@ import sys
 
 load_pickle = False
 
-start_date_train = '2009-01-01'
+start_date_train = '2014-09-25'
 date_test = '2014-10-01'
-min_seq_length = 5
-max_seq_length = 100
+min_seq_length = 2
+max_seq_length = 4
 
 
-movies_min_ratings = 20
+movies_min_ratings = 1500 #20
 
+# representation: 1: 1 sample per user, 2: data augmentation, 3: intermediate errors
+representation = 3
 
 if load_pickle:
     with open("../data/Movielens/ml-20m/df_date.pickle", 'rb') as handle:
@@ -77,7 +79,7 @@ user_test = []
 discarded_users = []
 i = 0
 for name, group in grouped:
-    
+
     # Obtain movies_ids and its position in the one-hot vector
     user_movie_ids_train = group[group['date'] < date_test].sort_values('date').movieId.values
     one_hot_pos_train = movieIds[user_movie_ids_train]
@@ -92,17 +94,35 @@ for name, group in grouped:
         time_idx = np.array(range(0, num_movies_train))
         ratings[time_idx, one_hot_pos_train] = 1
             
-        # Create training sample
-        for j in range(min_seq_length, num_movies_train):
-            x_train = np.zeros((max_seq_length, num_diff_items), dtype=np.int8)
-            start = max(0, (j-max_seq_length))
-            x_train[0:(j-start),:] = ratings[start:j,:]
-            y_train = ratings[j, :]
-            y_train = y_train
+        # Create training samples depending on the representation
+        if representation == 2:
+            for j in range(min_seq_length, num_movies_train):
+                x_train = np.zeros((max_seq_length, num_diff_items), dtype=np.int8)
+                start = max(0, (j-max_seq_length))
+                x_train[0:(j-start),:] = ratings[start:j,:]
+                y_train = ratings[j, :]
+                y_train = y_train
 
-            X_train.append(sparse.csr_matrix(x_train, dtype=dtype_sparse))
-            Y_train.append(sparse.csr_matrix(y_train, dtype=dtype_sparse))
-            user_train.append(name)
+                X_train.append(sparse.csr_matrix(x_train, dtype=dtype_sparse))
+                Y_train.append(sparse.csr_matrix(y_train, dtype=dtype_sparse))
+                user_train.append(name)
+        elif representation == 3:
+            #for i in range(0, num_movies_train, min_seq_length):
+            for i in range(0, num_movies_train, max_seq_length):
+                x_start = i
+                x_end = min(i + max_seq_length, num_movies_train - 1)
+                y_start = x_start + 1
+                y_end = x_end + 1
+                length_sample = x_end - x_start
+                if length_sample >= min_seq_length:
+                    x_train = np.zeros((max_seq_length, num_diff_items), dtype=np.int8)
+                    y_train = np.zeros((max_seq_length, num_diff_items), dtype=np.int8)
+                    x_train[0:length_sample, :] = ratings[x_start:x_end, :]
+                    y_train[0:length_sample, :] = ratings[y_start:y_end, :]
+                    X_train.append(sparse.csr_matrix(x_train, dtype=dtype_sparse))
+                    Y_train.append(sparse.csr_matrix(y_train, dtype=dtype_sparse))
+                    user_train.append(name)
+
             
         # Create sample for test
         x_test = np.zeros((max_seq_length, num_diff_items), dtype=np.int8)
@@ -133,11 +153,11 @@ print('Num train samples: ' + str(len(X_train)))
 print('Num test samples: ' + str(len(X_test)))
         
 # Save pickles
-with open("pickles/movielens/discarded_users_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
+with open("pickles/movielens/discarded_users_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(discarded_users, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/user_train_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
+with open("pickles/movielens/user_train_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(user_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/user_test_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
+with open("pickles/movielens/user_test_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(user_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
 df_date = []
 df = []
@@ -146,18 +166,18 @@ discarded_users = []
 user_train = []
 user_test = []
 gc.collect()
-with open("pickles/movielens/X_test_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
+with open("pickles/movielens/X_test_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(X_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
-with open("pickles/movielens/Y_test_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
+with open("pickles/movielens/Y_test_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(Y_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
 X_test = []
 Y_test = []
 gc.collect()
-with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
+with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
 Y_train = []
 gc.collect()
-with open("pickles/movielens/X_train_" + str(max_seq_length) + "_2009_filter20.pickle", 'wb') as handle:
+with open("pickles/movielens/X_train_" + str(max_seq_length) + "_2014_filter20_rep" + str(representation) + ".pickle", 'wb') as handle:
     pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
 print('Saved pickles!')
 

@@ -118,6 +118,10 @@ def build_train_and_test(df, df_test, representation, max_interactions, aux_feat
         print('Build rep 8')
         #df = mark_interactions(df)
         X_train, Y_train, X_test, X_local_test, Y_local_test, X_train_last_month, Y_train_last_month  = build_rep_8(df, df_test, max_interactions, aux_features, padding, time_column)
+    elif representation == 9:
+        print('Build rep 9')
+        #df = mark_interactions(df)
+        X_train, Y_train, X_test, X_local_test, Y_local_test, X_train_last_month, Y_train_last_month  = build_rep_9(df, df_test, max_interactions, aux_features, padding, time_column)
     return X_train, Y_train, X_test, X_local_test, Y_local_test, X_train_last_month, Y_train_last_month 
     
 def mark_interactions(df):
@@ -1261,5 +1265,160 @@ def build_rep_8(df, df_test, max_interactions, aux_features, padding, time_colum
         with open('pickles/Y_local_test_temp.pickle', 'wb') as handle:
             pickle.dump(Y_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)    
     
-    return X_train, Y_train, X_test, X_local_test, Y_local_test, X_train, Y_train     
- 
+    return X_train, Y_train, X_test, X_local_test, Y_local_test, X_train, Y_train
+
+
+'''
+Build representation 9: Only vectors of interactions formed by: Positive interactions(adds) + Negative interactions(drops) + time from last interaction with intermediate targets
+Same than rep 4, but with intermediate targets
+'''
+def build_rep_9(df, df_test, max_interactions, aux_features, padding, time_column):
+    if False:
+        aux_features_length = str(len(aux_features))
+        with open('pickles/X_train_temp.pickle', 'rb') as handle:
+            X_train = pickle.load(handle)
+        with open('pickles/X_test_temp.pickle', 'rb') as handle:
+            X_test = pickle.load(handle)
+        with open('pickles/Y_train_temp.pickle', 'rb') as handle:
+            Y_train = pickle.load(handle)
+        with open('pickles/X_local_test_temp.pickle', 'rb') as handle:
+            X_local_test = pickle.load(handle)
+        with open('pickles/Y_local_test_temp.pickle', 'rb') as handle:
+            Y_local_test = pickle.load(handle)
+
+    else:
+
+        dtype_sparse = np.int8
+        if len(aux_features) > 0:
+            df_aux_features = load_aux_features_df(aux_features)
+            df = df.join(df_aux_features, rsuffix='_r', lsuffix='_l')
+            dtype_sparse = np.float32
+        print('Building representation 9')
+        sys.stdout.flush()
+        ncodpers_test = df_test['ncodpers'].tolist()
+        columns_pos_interaction = []
+        columns_neg_interaction = []
+        for prod in target_columns:
+            columns_pos_interaction.append(prod + '_pos_interaction')
+            columns_neg_interaction.append(prod + '_neg_interaction')
+        # time_column = 'time_from_last_interaction'
+        X_train = []
+        Y_train = []
+        X_train_last_month = []
+        Y_train_last_month = []
+        X_test = np.zeros((len(ncodpers_test), max_interactions,
+                           len(columns_pos_interaction) + len(columns_pos_interaction) + 1 + len(aux_features)),
+                          dtype=np.int8)
+        X_local_test = []
+        Y_local_test = []
+        num_type_interactions = len(columns_pos_interaction + columns_neg_interaction + [time_column] + aux_features)
+        a = 0
+        local_test_date = df.fecha_dato.max()
+        prediction_date_training = df.fecha_dato.unique()[-2]
+        # Work only with users with interactions
+        df_interactions = df[df.b_interaction == 1]
+        grouped = df_interactions.groupby('ncodpers')
+        for ncodpers, group in grouped:
+
+            # Training
+            group_previous_local_test = group[group.fecha_dato < local_test_date]
+            if len(group_previous_local_test) > 0:
+                interactions = group_previous_local_test[
+                    columns_pos_interaction + columns_neg_interaction + [time_column] + aux_features]
+                # add_interactions = group[columns_pos_interaction + [time_column]]
+                interactions = interactions[group_previous_local_test['b_interaction'] == True].values
+                num_interactions = len(interactions)
+                if num_interactions > 1:
+                    x = np.zeros((max_interactions, interactions.shape[1]))
+                    y = np.zeros((max_interactions, len(columns_pos_interaction)))
+                    x[0:(num_interactions-1), :] = interactions[0:(num_interactions-1), :]
+                    y[0:(num_interactions-1), :] = interactions[1:num_interactions, 0:len(columns_pos_interaction)]
+                    # Only append if it contains positive interactions
+                    if np.sum(y) > 0:
+                        X_train.append(sparse.csr_matrix(x, dtype=dtype_sparse))
+                        Y_train.append(sparse.csr_matrix(y, dtype=dtype_sparse))
+
+
+            # Training last month
+            group_last_record = group[group.fecha_dato == prediction_date_training]
+            if len(group_last_record) > 0:
+                if group_last_record['b_interaction'].values[0] == 1:
+                    y = group_last_record[columns_pos_interaction].values
+                    # Only add if there is added products
+                    if 1 in y:
+                        group_previous_records = group[group.fecha_dato < prediction_date_training]
+                        interactions = group_previous_records[group_previous_records['b_interaction'] == True]
+                        # Only add if there is previous interactions
+                        if len(interactions) > 0:
+                            interactions = interactions[
+                                columns_pos_interaction + columns_neg_interaction + [time_column] + aux_features].values
+                            # If more interactions than maximum, then obtain only the last max_interactions
+                            if len(interactions) > max_interactions:
+                                interactions = interactions[-max_interactions:, :]
+                            x = np.zeros((max_interactions, interactions.shape[1]))
+                            if padding.lower() == 'right':
+                                x[:len(interactions), :] = interactions  # Padding Right
+                            elif padding.lower() == 'left':
+                                x[-len(interactions):, :] = interactions  # Padding Left
+                            X_train_last_month.append(sparse.csr_matrix(x, dtype=dtype_sparse))
+                            Y_train_last_month.append(sparse.csr_matrix(y, dtype=dtype_sparse))
+
+            # Test set kaggle
+            if ncodpers in ncodpers_test:
+                idx_test = ncodpers_test.index(ncodpers)
+                x_test = np.zeros((max_interactions, num_type_interactions))
+                interactions = group[group['b_interaction'] == True]
+                if len(interactions) > 0:
+                    interactions = interactions[
+                        columns_pos_interaction + columns_neg_interaction + [time_column] + aux_features].values.astype(
+                        np.int8)
+                    if len(interactions) > max_interactions:
+                        interactions = interactions[-max_interactions:, :]
+                    if padding.lower() == 'right':
+                        x_test[:len(interactions):, :] = interactions  # Padding Right
+                    elif padding.lower() == 'left':
+                        x_test[-len(interactions):, :] = interactions  # Padding Left
+                X_test[idx_test] = x_test
+
+            # Local test set
+            group_last_record = group[group.fecha_dato == local_test_date]
+            if len(group_last_record) > 0:
+                if group_last_record['b_interaction'].values[0] == 1:
+                    y = group_last_record[columns_pos_interaction].values
+                    # Only add if there is added products
+                    if 1 in y:
+                        group_previous_records = group[group.fecha_dato < local_test_date]
+                        interactions = group_previous_records[group_previous_records['b_interaction'] == True]
+                        # Only add if there is previous interactions
+                        if len(interactions) > 0:
+                            interactions = interactions[
+                                columns_pos_interaction + columns_neg_interaction + [time_column] + aux_features].values
+                            # If more interactions than maximum, then obtain only the last max_interactions
+                            if len(interactions) > max_interactions:
+                                interactions = interactions[-max_interactions:, :]
+                            x = np.zeros((max_interactions, interactions.shape[1]))
+                            if padding.lower() == 'right':
+                                x[:len(interactions), :] = interactions  # Padding Right
+                            elif padding.lower() == 'left':
+                                x[-len(interactions):, :] = interactions  # Padding Left
+                            X_local_test.append(sparse.csr_matrix(x, dtype=dtype_sparse))
+                            Y_local_test.append(sparse.csr_matrix(y, dtype=dtype_sparse))
+
+            a = a + 1
+
+            if a % 10000 == 0:
+                print(a)
+                sys.stdout.flush()
+
+        #with open('pickles/X_train_temp.pickle', 'wb') as handle:
+            #pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        #with open('pickles/Y_train_temp.pickle', 'wb') as handle:
+            #pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        #with open('pickles/X_test_temp.pickle', 'wb') as handle:
+            #pickle.dump(X_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        #with open('pickles/X_local_test_temp.pickle', 'wb') as handle:
+            #pickle.dump(X_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        #with open('pickles/Y_local_test_temp.pickle', 'wb') as handle:
+            #pickle.dump(Y_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    return X_train, Y_train, X_test, X_local_test, Y_local_test, X_train_last_month, Y_train_last_month

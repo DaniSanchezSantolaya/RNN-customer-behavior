@@ -18,6 +18,8 @@ b_val_in_batches = True
 
 b_compute_acc = False
 b_compute_map = False
+b_compute_x_last_month = False
+b_compute_x_local_test = False
     
 def _seq_length(sequence):
     used = tf.sign(tf.reduce_max(tf.abs(sequence), reduction_indices=2))
@@ -48,7 +50,11 @@ class RNN_dynamic:
 
         # tf Graph input
         self.x = tf.placeholder("float", [None, self.parameters['seq_length'], self.parameters['n_input']], name='x')
-        self.y = tf.placeholder("float", [None, self.parameters['n_output']], name='y')
+        if self.parameters['y_length'] > 1:
+            self.y = tf.placeholder("float", [None, self.parameters['seq_length'], self.parameters['n_output']],
+                                    name='y')
+        else:
+            self.y = tf.placeholder("float", [None, self.parameters['n_output']], name='y')
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
 
         # Define weights
@@ -124,29 +130,61 @@ class RNN_dynamic:
             self.last_relevant_output = outputs[:,-1,:]
         tf.summary.histogram('last_relevant_output', self.last_relevant_output)
 
-        
-        #self._debug = logits
-        #self._debug = outputs
+        self.final_logits = tf.matmul(self.last_relevant_output, self.weights['out']) + self.biases['out']
+        # If backpropagate all targets, compute all the logits at every timestep
+        if self.parameters['y_length'] > 1:
+            # logits for all states
+            self.outputs_reshaped = tf.reshape(outputs, [-1, int(outputs.get_shape()[2])])
+            self.all_logits = tf.matmul(self.outputs_reshaped, self.weights['out']) + self.biases['out']
+            self.all_logits_reshaped = tf.reshape(self.all_logits,
+                                                  [-1, self.parameters['seq_length'], self.parameters['n_output']])
 
         if self.parameters['type_output'].lower() == 'sigmoid':
-            self.logits = tf.matmul(self.last_relevant_output, self.weights['out']) + self.biases['out']
-            self.pred_prob = tf.sigmoid(self.logits)
-            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.logits, self.y))
+            self.pred_prob = tf.sigmoid(self.final_logits)
+            if self.parameters['y_length'] == 1:
+                self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.final_logits, self.y))
+            elif self.parameters['y_length'] > 1:
+                self.individual_losses_per_class = tf.nn.sigmoid_cross_entropy_with_logits(self.all_logits_reshaped, self.y)
+                # print('individual_losses_per_class shape: ' + str(self.individual_losses_per_class.get_shape()))
+                self.interaction_outputs = tf.sign(tf.reduce_max(tf.abs(self.y), reduction_indices=2))
+                # print('interaction_outputs shape: ' + str(self.interaction_outputs.get_shape()))
+                self.individual_losses_all_interactions = tf.reduce_mean(self.individual_losses_per_class, axis=2)
+                # print('individual_losses_all_interactions shape: ' + str(self.individual_losses_all_interactions.get_shape()))
+                self.individual_losses = self.individual_losses_all_interactions * self.interaction_outputs
+                # print('individual_losses shape: ' + str(self.individual_losses.get_shape()))
         elif self.parameters['type_output'].lower() == 'softmax':
-            self.logits = tf.matmul(self.last_relevant_output, self.weights['out']) + self.biases['out']
-            self.pred_prob = tf.nn.softmax(self.logits)
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.y))
-            tf.summary.histogram('logits', self.logits)
+            self.pred_prob = tf.nn.softmax(self.final_logits)
+            if self.parameters['y_length'] == 1:
+                self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.final_logits, labels=self.y))
+            elif self.parameters['y_length'] > 1:
+                self.individual_losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.all_logits_reshaped, labels=self.y)
+            tf.summary.histogram('logits', self.final_logits)
             tf.summary.histogram('pred_prob', self.pred_prob)
         elif self.parameters['type_output'].lower() == 'sampled_softmax':
-            self.logits = tf.matmul(self.last_relevant_output, self.weights['out']) + self.biases['out']
-            self.pred_prob = tf.nn.softmax(self.logits)
+            self.pred_prob = tf.nn.softmax(self.final_logits)
             weights_out_t = tf.transpose(self.weights['out'])
             labels_ids = tf.where(tf.equal(self.y, 1))[:, 1]
             labels_t = tf.reshape(labels_ids, [-1, 1])
             self.loss = tf.reduce_mean(tf.nn.sampled_softmax_loss(weights=weights_out_t, biases=self.biases['out'], inputs=self.last_relevant_output,
                                labels=labels_t, num_sampled=128, num_classes=self.parameters['n_output']))
-            
+        elif self.parameters['type_output'].lower() == 'embeddings':
+            self.pred_prob = self.final_logits
+            if self.parameters['y_length'] == 1:
+                self.loss = tf.reduce_mean(tf.losses.cosine_distance(labels=self.y, predictions=self.final_logits))
+            elif self.parameters['y_length'] > 0:
+                self.loss = tf.losses.cosine_distance(labels=self.y, predictions=self.final_logits)
+                # possible alternative: https://www.tensorflow.org/api_docs/python/tf/contrib/losses/cosine_distance
+
+
+        # if backpropagate the errors, compute the mean of the loss for all timesteps
+        if self.parameters['y_length'] > 1:
+            self.sum_loss_per_batch = tf.reduce_sum(self.individual_losses, axis=1)
+            # print('sum_loss_per_batch shape: ' + str(self.sum_loss_per_batch.get_shape()))
+            self.length_seq = _seq_length(self.y)
+            self.loss_per_batch = tf.div(self.sum_loss_per_batch, tf.cast(self.length_seq, tf.float32))
+            # print('loss_per_batch shape: ' + str(self.loss_per_batch.get_shape()))
+            self.loss = tf.reduce_mean(self.loss_per_batch)
+            # print('loss shape: ' + str(self.loss.get_shape()))
 
 
         #Add L2 regularizatoin loss
@@ -311,6 +349,17 @@ class RNN_dynamic:
                 if new_epoch:
                     actual_epoch += 1
 
+                # START DEBUG
+                #print('batch_x: ' + str(batch_x))
+                #print('batch_y: ' + str(batch_y))
+                #interaction_outputs = sess.run(self.interaction_outputs,
+                #                                       feed_dict={self.x: batch_x, self.y: batch_y,
+                #                                                  self.dropout_keep_prob: 1})
+                #print('interaction_outputs: ' + str(interaction_outputs))
+
+                # END DEBUG
+
+
                 # Run optimization op (backprop)
                 #sess.run(self.optimizer, feed_dict={self.x: batch_x, self.y: batch_y, self.dropout_keep_prob: 1})
                 _, c = sess.run([self.optimizer, self.loss],
@@ -327,12 +376,13 @@ class RNN_dynamic:
                     print("Iter "+ str(total_iterations) + ", mean last 25 train loss: " + str(np.mean(train_loss_list[-25:])))
                     # Calculate training loss at last month
                     if len(ds._X_train_last_month) > 0:
-                        train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month, self.dropout_keep_prob: 1})
-                        print("Iter " + str(total_iterations) + ", Last month train Loss= " +
-                              "{:.6f}".format(train_last_month_loss) + ", Last month train Accuracy= " +
-                              "{:.6f}".format(train_last_month_accuracy) + ", Last train Map= " +
-                              "{:.6f}".format(train_last_month_map))
-                        train_last_month_writer.add_summary(summary, total_iterations)
+                        if b_compute_x_last_month:
+                            train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month, self.dropout_keep_prob: 1})
+                            print("Iter " + str(total_iterations) + ", Last month train Loss= " +
+                                  "{:.6f}".format(train_last_month_loss) + ", Last month train Accuracy= " +
+                                  "{:.6f}".format(train_last_month_accuracy) + ", Last train Map= " +
+                                  "{:.6f}".format(train_last_month_map))
+                            train_last_month_writer.add_summary(summary, total_iterations)
                     # Calculate val loss
                     if ds._name_dataset.lower() == 'santander':
                         self.val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_val, self.y:ds._Y_val, self.dropout_keep_prob: 1})
@@ -383,12 +433,13 @@ class RNN_dynamic:
 
                     # Calculate test loss
                     if len(ds._X_local_test) > 0:
-                        self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
-                        test_writer.add_summary(summary, total_iterations)
-                        print("Iter " + str(total_iterations) + ", Test Loss= " +
-                              "{:.6f}".format(self.test_loss) + ", Test Accuracy= " +
-                              "{:.6f}".format(test_acc) + ", Test Map= " +
-                              "{:.6f}".format(test_map))
+                        if b_compute_x_local_test:
+                            self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
+                            test_writer.add_summary(summary, total_iterations)
+                            print("Iter " + str(total_iterations) + ", Test Loss= " +
+                                  "{:.6f}".format(self.test_loss) + ", Test Accuracy= " +
+                                  "{:.6f}".format(test_acc) + ", Test Map= " +
+                                  "{:.6f}".format(test_map))
 
 
                     #If best loss save the model as best model so far
@@ -464,11 +515,11 @@ class RNN_dynamic:
                 #print('Initial index: ' + str(initial_idx))
                 #print('final_idx index: ' + str(final_idx))
                 if i < (num_test_splits - 1):
-                    logits, pred_test_split = sess.run([self.logits, self.pred_prob], feed_dict={self.x: X_test[initial_idx:final_idx], self.dropout_keep_prob: 1})
+                    logits, pred_test_split = sess.run([self.final_logits, self.pred_prob], feed_dict={self.x: X_test[initial_idx:final_idx], self.dropout_keep_prob: 1})
                     #print(pred_test_split.shape)
                     pred_test[initial_idx:final_idx] = pred_test_split
                 else:
-                    logits, pred_test_split = sess.run([self.logits, self.pred_prob], feed_dict={self.x: X_test[initial_idx:], self.dropout_keep_prob: 1})
+                    logits, pred_test_split = sess.run([self.final_logits, self.pred_prob], feed_dict={self.x: X_test[initial_idx:], self.dropout_keep_prob: 1})
                     #print(pred_test_split.shape)
                     pred_test[initial_idx:] = pred_test_split
                 #pred_test.append(pred_test_split)

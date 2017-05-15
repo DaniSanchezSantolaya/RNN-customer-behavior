@@ -14,14 +14,14 @@ from tensorflow.contrib import rnn
 import sys
 import ast
 import time
-
+import gc
 
 random.seed(17)
 random.seed(17)
 np.random.seed(17)
 
 
-#python experiment.py representation max_interactions padding b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle ks time_column init_stdev embedding_activation
+#python experiment.py representation max_interactions padding b_load_pickles p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps load_df_pickle ks time_column init_stdev
 #python experiment.py 4 10 right False 0.2 adam 0.0001 64 128 lstm 1 0.1 0.0 sigmoid 40000 True [2,3,4,5,6,7] num_month
 #python experiment.py 4 5 left True 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7] num_month
 #python experiment.py 4 5 left False 0.1 adam 0.0001 128 128 lstm2 1 0.0 0.0 sigmoid 2500000 True [2,3,4,5,6,7] time_from_last_interaction
@@ -85,6 +85,7 @@ if len(sys.argv) < 2: #default #C:\Projects\Thesis\src>python experiment.py 4 6 
     model_parameters['padding'] = padding
     model_parameters['init_stdev'] = 0.01
     model_parameters['embedding_activation'] = 'linear'
+    model_parameters['embedding_size'] = 0
 
     load_df_pickle = True
     k = 7
@@ -114,13 +115,19 @@ else:
     model_parameters['max_steps'] = int(sys.argv[15])
     model_parameters['padding'] = padding
     model_parameters['init_stdev'] = float(sys.argv[19])
-    model_parameters['embedding_activation'] = str(sys.argv[20])
+    model_parameters['embedding_activation'] = 'linear'
+    model_parameters['embedding_size'] = 0
+
 
     load_df_pickle = sys.argv[16]
     ks =  ast.literal_eval(sys.argv[17])
     time_column = sys.argv[18]
 
 
+if representation == 4:
+    model_parameters['y_length'] = 1
+elif representation == 9:
+    model_parameters['y_length'] = max_interactions
 
 name_submission = 'kaggle_submissions/rep_' +str(representation) + '-interactions_' + str(max_interactions) + '-padding_' + str(padding) + '-' + model_parameters['opt'] + '-lrate_' + str(model_parameters['learning_rate']) + '-hidden_' + str(model_parameters['n_hidden']) + '-bSize_' + str(model_parameters['batch_size']) + '-' + model_parameters['rnn_type'] + '-rnn_layers' + str(model_parameters['rnn_layers']) + '-dropout_' + str(model_parameters['dropout']) + '-L2_' + str(model_parameters['l2_reg']) + '-typeoutput_' + str(model_parameters['type_output']) + '-max_steps_' + str(model_parameters['max_steps']) 
 if len(aux_features) > 0:
@@ -153,8 +160,6 @@ def load_pickles():
     aux_features_length = str(len(aux_features))
     with open('pickles/X_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '_' + time_column +  '.pickle', 'rb') as handle:
         X_train = pickle.load(handle)
-    with open('pickles/X_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '_' + time_column + '.pickle', 'rb') as handle:
-        X_test = pickle.load(handle)
     with open('pickles/Y_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '_' + time_column + '.pickle', 'rb') as handle:
         Y_train = pickle.load(handle)
     with open('pickles/X_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '_' + time_column + '.pickle', 'rb') as handle:
@@ -166,32 +171,46 @@ def load_pickles():
     with open('pickles/Y_train_last_month_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '_' + time_column + '.pickle', 'rb') as handle:
         Y_train_last_month = pickle.load(handle)
 
-    return X_train, Y_train, X_test, X_local_test, Y_local_test, X_train_last_month, Y_train_last_month
+    return X_train, Y_train,  X_local_test, Y_local_test, X_train_last_month, Y_train_last_month
     
 def save_pickles(X_train, Y_train, X_test, X_local_test, Y_local_test, X_train_last_month, Y_train_last_month ):
     #Save pickle
     aux_features_length = str(len(aux_features))
     with open('pickles/X_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length  + '_' + time_column + '.pickle', 'wb') as handle:
         pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    X_train = []
+    gc.collect()
     with open('pickles/X_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '_' + time_column + '.pickle', 'wb') as handle:
         pickle.dump(X_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    X_test = []
+    gc.collect()
     with open('pickles/Y_train_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '_' + time_column + '.pickle', 'wb') as handle:
         pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    Y_train = []
+    gc.collect()
     with open('pickles/X_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '_' + time_column + '.pickle', 'wb') as handle:
         pickle.dump(X_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    X_local_test = []
+    gc.collect()
     with open('pickles/Y_local_test_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '_' + time_column + '.pickle', 'wb') as handle:
         pickle.dump(Y_local_test, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    Y_local_test = []
+    gc.collect()
     with open('pickles/X_train_last_month_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '_' + time_column + '.pickle', 'wb') as handle:
         pickle.dump(X_train_last_month, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    X_train_last_month = []
+    gc.collect()
     with open('pickles/Y_train_last_month_rep' + str(representation) + '_' + str(max_interactions) + '_' + padding + '_' + aux_features_length + '_' + time_column + '.pickle', 'wb') as handle:
         pickle.dump(Y_train_last_month, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    Y_train_last_month = []
+    gc.collect()
 
 
         
-def generate_validation_set(X_train, Y_train, X_test):
+def generate_validation_set(X_train, Y_train):
     print('Initial X_train size: ' + str( len(X_train)))
     print('Initial Y_train size: ' + str( len(Y_train)))
-    print('Initial X_test size: ' + str( len(X_test)))
+
 
     num_val = int(len(X_train) * p_val)
 
@@ -206,7 +225,10 @@ def generate_validation_set(X_train, Y_train, X_test):
     Y_val2 = []
     for x,y in zip(X_val, Y_val):
         X_val2.append(x.toarray())
-        Y_val2.append(y.toarray().reshape(y.toarray().shape[1]))
+        if y.toarray().shape[0] > 1:
+            Y_val2.append(y.toarray())
+        else:
+            Y_val2.append(y.toarray().reshape(y.toarray().shape[1]))
     X_val = np.array(X_val2)
     Y_val = np.array(Y_val2)
 
@@ -215,14 +237,13 @@ def generate_validation_set(X_train, Y_train, X_test):
     print('Final Y_train size: ' + str( len(Y_train)))
     print('Final X_val size: ' + str( len(X_val)))
     print('Final Y_val size: ' + str( len(Y_val)))
-    print('Final X_test size: ' + str( len(X_test)))
 
-    return X_train, X_val, X_test, Y_train, Y_val        
+    return X_train, X_val, Y_train, Y_val
         
 df_test = load_test_csv()
 if b_load_pickles:
     print('Load pickles')
-    X_train, Y_train, X_test, X_local_test, Y_local_test, X_train_last_month, Y_train_last_month  = load_pickles()
+    X_train, Y_train, X_local_test, Y_local_test, X_train_last_month, Y_train_last_month  = load_pickles()
 else:
     print('Build pickles')
     if load_df_pickle:
@@ -236,7 +257,7 @@ else:
 
 X_train = np.array(X_train)
 Y_train = np.array(Y_train)
-X_train, X_val, X_test, Y_train, Y_val = generate_validation_set(X_train, Y_train, X_test)
+X_train, X_val, Y_train, Y_val = generate_validation_set(X_train, Y_train)
 print('Final X_train_last_month size: ' + str( len(X_train_last_month)))
 print('Final Y_train_last_month size: ' + str( len(Y_train_last_month)))
 
@@ -260,6 +281,8 @@ Y_local_test = []
 model = RNN_dynamic(model_parameters)
 model.create_model()
 model.train(ds)
+print('Finish!')
+sys.exit()
 #for rep4 obtain only test samples with interactions
 if (representation == 4) or (representation == 5) or (representation == 7) or (representation == 8):
     indices_interactions = []

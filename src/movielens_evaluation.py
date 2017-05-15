@@ -10,13 +10,13 @@ from rnn_dynamic import *
 # from rnn_attentional import * #For the attentional experiment
 
 
-checkpoint_path = 'checkpoints/rep0-lstm2-128-1-128-adam-500000000-20170502-111709/last_model/last_model.ckpt-1312000'
+checkpoint_path = 'checkpoints/rep0-lstm2-256-1-128-adam-10000000000-20170511-173749/best_model/model_best.ckpt-3072000'
 
 max_interactions = 100
 
-with open("pickles/movielens/X_test_" + str(max_interactions) + "_2009_filter10.pickle", 'rb') as handle:
+with open("pickles/movielens/X_test_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
     X_test = pickle.load(handle)
-with open("pickles/movielens/Y_test_" + str(max_interactions) + "_2009_filter10.pickle", 'rb') as handle:
+with open("pickles/movielens/Y_test_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
     Y_test = pickle.load(handle)
 
 
@@ -24,7 +24,7 @@ with open("pickles/movielens/Y_test_" + str(max_interactions) + "_2009_filter10.
 model_parameters = {}
 model_parameters['opt'] = 'adam'
 model_parameters['learning_rate'] = 0.01
-model_parameters['n_hidden'] = 128
+model_parameters['n_hidden'] = 256
 model_parameters['batch_size'] = 128
 model_parameters['rnn_type'] = 'lstm2'
 model_parameters['rnn_layers'] = 1
@@ -36,7 +36,9 @@ model_parameters['padding'] = 'right'
 model_parameters['n_input'] = X_test[0].toarray().shape[1]
 model_parameters['n_output'] = Y_test[0].toarray().shape[1]
 model_parameters['seq_length'] = X_test[0].toarray().shape[0]
-model_parameters['embedding_size'] = 0
+model_parameters['embedding_size'] = 64
+model_parameters['embedding_activation'] = 'linear'
+model_parameters['y_length'] = 1
 # Parameters for the attentional model only
 model_parameters['attentional_layer'] = 'embedding'
 model_parameters['init_stdev'] = 0.01

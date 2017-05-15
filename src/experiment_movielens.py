@@ -17,7 +17,7 @@ random.seed(17)
 random.seed(17)
 np.random.seed(17)
 
-#python experiment_movielens.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps init_stdev embedding_size embedding_activation type_input input_embedding_size
+#python experiment_movielens.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps init_stdev embedding_size embedding_activation type_input input_embedding_size representation
 #python experiment_movielens.py 100 right 0.03 adam 0.01 50 128 lstm2 1 0.2 0 softmax 4000000 0.1 0 linear one-hot > movielens.txt
 #ubuntu@packer-ubuntu-16:~$ python3.5 experiment_movielens.py 100 right 0.025 adam 0.01 50 128 lstm2 1 0.2 0 softmax 10000000 0.1 0 linear one-hot > movielens.txt
 
@@ -54,8 +54,14 @@ if len(sys.argv) < 2:
     model_parameters['init_stdev'] = 1
     model_parameters['embedding_size'] = 0
     model_parameters['embedding_activation'] = 'linear'
-    model_parameters['type_input'] = 'one-hot'
-    model_parameters['input_embedding_size'] = 0
+
+
+    # Only used for reading the corresponding pickle
+    type_input = 'one-hot'
+    input_embedding_size = 0
+
+    # representation: 1: 1 sample per user, 2: data augmentation, 3: intermediate errors
+    representation = 3
     
 
 
@@ -82,12 +88,19 @@ else:
     model_parameters['init_stdev'] = float(sys.argv[14])
     model_parameters['embedding_size'] = int(sys.argv[15])
     model_parameters['embedding_activation'] = sys.argv[16]
-    model_parameters['type_input'] = sys.argv[17]
-    model_parameters['input_embedding_size'] = sys.argv[18]
-    
 
 
+    # Only used for reading the corresponding pickle
+    type_input = sys.argv[17]
+    input_embedding_size = sys.argv[18]
 
+    # representation: 1: 1 sample per user, 2: data augmentation, 3: intermediate errors
+    representation = int(sys.argv[19])
+
+if representation == 3:
+    model_parameters['y_length'] = max_interactions
+else:
+    model_parameters['y_length'] = 1
 
 
 print('Arguments: ')
@@ -107,20 +120,20 @@ print('max_steps: ' + str(model_parameters['max_steps']))
 print('init_stdev: ' + str(model_parameters['init_stdev']))
 print('embedding_size: ' + str(model_parameters['embedding_size']))
 print('embedding_activation: ' + str(model_parameters['embedding_activation']))
-print('type_input: ' + str(model_parameters['type_input']))
-print('input_embedding_size: ' + str(model_parameters['input_embedding_size']))
+print('type_input: ' + str(type_input))
+print('input_embedding_size: ' + str(input_embedding_size))
 
 
 #### Load train pickle
-if model_parameters['type_input'] == 'one-hot':
-    with open("pickles/movielens/X_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
+if type_input == 'one-hot':
+    with open("pickles/movielens/X_train_" + str(max_interactions) + "_2014_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
         X_train = pickle.load(handle)
-    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
+    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_2014_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
         Y_train = pickle.load(handle)
-elif model_parameters['type_input'] == 'embeddings':
-    with open("pickles/movielens/X_train_" + str(max_interactions) + "_embeddings_" + str(model_parameters['input_embedding_size']) + "_2009_filter20.pickle", 'rb') as handle:
+elif type_input == 'embeddings':
+    with open("pickles/movielens/X_train_" + str(max_interactions) + "_embeddings_" + str(input_embedding_size) + "_2014_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
         X_train = pickle.load(handle)
-    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_embeddings_" + str(model_parameters['input_embedding_size']) + "_2009_filter20.pickle", 'rb') as handle:
+    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_embeddings_" + str(input_embedding_size) + "_2014_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
         Y_train = pickle.load(handle)
 
 X_train = np.array(X_train)
@@ -148,10 +161,14 @@ print('Final Y_train size: ' + str( len(Y_train)))
 print('Final X_val size: ' + str( len(X_val)))
 print('Final Y_val size: ' + str( len(Y_val)))
      
-
-model_parameters['n_input'] = X_train[0].toarray().shape[1]
-model_parameters['n_output'] = Y_train[0].toarray().shape[1]
-model_parameters['seq_length'] = X_train[0].toarray().shape[0]
+if type_input == 'one-hot':
+    model_parameters['n_input'] = X_train[0].toarray().shape[1]
+    model_parameters['n_output'] = Y_train[0].toarray().shape[1]
+    model_parameters['seq_length'] = X_train[0].toarray().shape[0]
+else:
+    model_parameters['n_input'] = X_train[0].shape[1]
+    model_parameters['n_output'] = Y_train[0].shape[1]
+    model_parameters['seq_length'] = X_train[0].shape[0]
 print('num features: ' + str(model_parameters['n_input']))
 print('seq length: ' + str(model_parameters['seq_length']))
 print('num output: ' + str(model_parameters['n_output']))
