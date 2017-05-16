@@ -65,10 +65,17 @@ class RNN_dynamic:
             'out': tf.Variable(tf.random_normal([self.parameters['n_output']]), name='b_out')
         }
         if self.parameters['embedding_size'] > 0:
-            self.weights['emb'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']], stddev=self.parameters['init_stdev']), name='w_emb')
+            if self.parameters['W_emb_init'].lower() == 'none':
+                self.weights['emb'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']], stddev=self.parameters['init_stdev']), name='w_emb')
+                print('Defined no pretrained w_emb')
+            else: # Load pretrained W_emb
+                with open("pickles/movielens/" + self.parameters['W_emb_init'] + ".pickle", 'rb') as handle:
+                    arr_W = pickle.load(handle)
+                self.weights['emb'] = tf.Variable(arr_W, name="w_emb")
+                print('Defined pretrained w_emb')
             if self.parameters['embedding_activation'] != 'linear':
                 self.biases['emb'] = tf.Variable(tf.random_normal([self.parameters['embedding_size']]), name='b_emb')
-            print('Defined w_emb')
+
 
         # Define a lstm cell with tensorflow
         if self.parameters['rnn_type'].lower() == 'lstm':
@@ -356,7 +363,9 @@ class RNN_dynamic:
                 #                                       feed_dict={self.x: batch_x, self.y: batch_y,
                 #                                                  self.dropout_keep_prob: 1})
                 #print('interaction_outputs: ' + str(interaction_outputs))
-
+                #self.weights['emb']
+                #w_emb = sess.run(self.weights['emb'], feed_dict={self.x: batch_x, self.y: batch_y, self.dropout_keep_prob: 1})
+                #print('w_emb: ' + str(w_emb))
                 # END DEBUG
 
 
@@ -375,14 +384,15 @@ class RNN_dynamic:
                     train_loss_list.append(train_minibatch_loss)
                     print("Iter "+ str(total_iterations) + ", mean last 25 train loss: " + str(np.mean(train_loss_list[-25:])))
                     # Calculate training loss at last month
-                    if len(ds._X_train_last_month) > 0:
-                        if b_compute_x_last_month:
-                            train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month, self.dropout_keep_prob: 1})
-                            print("Iter " + str(total_iterations) + ", Last month train Loss= " +
-                                  "{:.6f}".format(train_last_month_loss) + ", Last month train Accuracy= " +
-                                  "{:.6f}".format(train_last_month_accuracy) + ", Last train Map= " +
-                                  "{:.6f}".format(train_last_month_map))
-                            train_last_month_writer.add_summary(summary, total_iterations)
+                    if ds._name_dataset.lower() == 'santander':
+                        if len(ds._X_train_last_month) > 0:
+                            if b_compute_x_last_month:
+                                train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month, self.dropout_keep_prob: 1})
+                                print("Iter " + str(total_iterations) + ", Last month train Loss= " +
+                                      "{:.6f}".format(train_last_month_loss) + ", Last month train Accuracy= " +
+                                      "{:.6f}".format(train_last_month_accuracy) + ", Last train Map= " +
+                                      "{:.6f}".format(train_last_month_map))
+                                train_last_month_writer.add_summary(summary, total_iterations)
                     # Calculate val loss
                     if ds._name_dataset.lower() == 'santander':
                         self.val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_val, self.y:ds._Y_val, self.dropout_keep_prob: 1})
@@ -432,14 +442,15 @@ class RNN_dynamic:
                                 print("Iter "+ str(total_iterations) + ", mean last 25 validation loss: " + str(np.mean(val_loss_list[-25:])))
 
                     # Calculate test loss
-                    if len(ds._X_local_test) > 0:
-                        if b_compute_x_local_test:
-                            self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
-                            test_writer.add_summary(summary, total_iterations)
-                            print("Iter " + str(total_iterations) + ", Test Loss= " +
-                                  "{:.6f}".format(self.test_loss) + ", Test Accuracy= " +
-                                  "{:.6f}".format(test_acc) + ", Test Map= " +
-                                  "{:.6f}".format(test_map))
+                    if ds._name_dataset.lower() == 'santander':
+                        if len(ds._X_local_test) > 0:
+                            if b_compute_x_local_test:
+                                self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
+                                test_writer.add_summary(summary, total_iterations)
+                                print("Iter " + str(total_iterations) + ", Test Loss= " +
+                                      "{:.6f}".format(self.test_loss) + ", Test Accuracy= " +
+                                      "{:.6f}".format(test_acc) + ", Test Map= " +
+                                      "{:.6f}".format(test_map))
 
 
                     #If best loss save the model as best model so far

@@ -17,9 +17,12 @@ random.seed(17)
 random.seed(17)
 np.random.seed(17)
 
-#python experiment_movielens_attentional.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps max_steps embedding_size attentional_layer embedding_activation attention_weights_activation type_input input_embedding_size
+#python experiment_movielens_attentional.py max_interactions padding p_val opt learning_rate n_hidden batch_size rnn_type rnn_layers dropout l2_reg type_output max_steps  embedding_size attentional_layer embedding_activation attention_weights_activation type_input input_embedding_size init_stdev W_emb_init representation
 
-
+# Change if using dataset dynamic
+num_total_files = 1#71
+num_validation_file = 8
+year = '2014' #2009
 
 start = time.time()
 
@@ -54,8 +57,13 @@ if len(sys.argv) < 2:
     model_parameters['attentional_layer'] = 'embedding'
     model_parameters['embedding_activation'] = 'linear'
     model_parameters['attention_weights_activation'] = 'linear'
-    model_parameters['type_input'] = 'one-hot'
-    model_parameters['input_embedding_size'] = 0
+    model_parameters['init_stdev'] = 1
+    model_parameters['W_emb_init'] = None
+
+
+    # Only used for reading the corresponding pickle
+    type_input = 'one-hot'
+    input_embedding_size = 0
 
 
 else:
@@ -83,10 +91,15 @@ else:
     model_parameters['attentional_layer'] = str(sys.argv[15])
     model_parameters['embedding_activation'] = str(sys.argv[16])
     model_parameters['attention_weights_activation'] = str(sys.argv[17])
-    model_parameters['type_input'] = sys.argv[18]
-    model_parameters['input_embedding_size'] = sys.argv[19]
+    model_parameters['init_stdev'] = float(sys.argv[20])
+    model_parameters['W_emb_init'] = sys.argv[21]
 
+    # Only used for reading the corresponding pickle
+    type_input = sys.argv[18]
+    input_embedding_size = sys.argv[19]
 
+    # representation: 1: 1 sample per user, 2: data augmentation, 3: intermediate errors
+    representation = int(sys.argv[22])
 
 
 
@@ -106,21 +119,31 @@ print('type_output: ' + str(model_parameters['type_output']))
 print('max_steps: ' + str(model_parameters['max_steps']))
 print('embedding_size: ' + str(model_parameters['embedding_size']))
 print('attentional_layer: ' + str(model_parameters['attentional_layer']))
-print('type_input: ' + str(model_parameters['type_input']))
+print('type_input: ' + str(type_input))
+print('init_stdev: ' + str(model_parameters['init_stdev']))
+print('W_emb_init: ' + str(model_parameters['W_emb_init']))
 
 
 #### Load train pickle
+if num_total_files == 1:
+    #### Load train pickle
+    if type_input == 'one-hot':
+        with open("pickles/movielens/X_train_" + str(max_interactions) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
+            X_train = pickle.load(handle)
+        with open("pickles/movielens/Y_train_" + str(max_interactions) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
+            Y_train = pickle.load(handle)
+    elif type_input == 'embeddings':
+        with open("pickles/movielens/X_train_" + str(max_interactions) + "_embeddings_" + str(input_embedding_size) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
+            X_train = pickle.load(handle)
+        with open("pickles/movielens/Y_train_" + str(max_interactions) + "_embeddings_" + str(input_embedding_size) + "_" + year + "_filter20_rep" + str(representation) + ".pickle", 'rb') as handle:
+            Y_train = pickle.load(handle)
+else: #Load first file, just for get the input, output sizes used later
+    with open("pickles/movielens/X_train_" + str(max_interactions) + "_embeddings_" + str(
+            input_embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file0.pickle", 'rb') as handle:
+        X_train = pickle.load(handle)
 
-#### Load train pickle
-if model_parameters['type_input'] == 'one-hot':
-    with open("pickles/movielens/X_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
-        X_train = pickle.load(handle)
-    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
-        Y_train = pickle.load(handle)
-elif model_parameters['type_input'] == 'embeddings':
-    with open("pickles/movielens/X_train_" + str(max_interactions) + "_embeddings_" + str(model_parameters['input_embedding_size']) + "_2009_filter20.pickle", 'rb') as handle:
-        X_train = pickle.load(handle)
-    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_embeddings_" + str(model_parameters['input_embedding_size']) + "_2009_filter20.pickle", 'rb') as handle:
+    with open("pickles/movielens/Y_train_" + str(max_interactions) + "_embeddings_" + str(
+            input_embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file0.pickle", 'rb') as handle:
         Y_train = pickle.load(handle)
 
 
@@ -150,13 +173,23 @@ print('Final X_val size: ' + str( len(X_val)))
 print('Final Y_val size: ' + str( len(Y_val)))
      
 
-model_parameters['n_input'] = X_train[0].toarray().shape[1]
-model_parameters['n_output'] = Y_train[0].toarray().shape[1]
-model_parameters['seq_length'] = X_train[0].toarray().shape[0]
+if type_input == 'one-hot':
+    model_parameters['n_input'] = X_train[0].toarray().shape[1]
+    model_parameters['n_output'] = Y_train[0].toarray().shape[1]
+    model_parameters['seq_length'] = X_train[0].toarray().shape[0]
+else:
+    model_parameters['n_input'] = X_train[0].shape[1]
+    model_parameters['n_output'] = Y_train[0].shape[1]
+    model_parameters['seq_length'] = X_train[0].shape[0]
 print('num features: ' + str(model_parameters['n_input']))
 print('seq length: ' + str(model_parameters['seq_length']))
 print('num output: ' + str(model_parameters['n_output']))
-ds = DataSet(X_train, Y_train, X_val, Y_val, [], [], 0, [], [], name_dataset = 'movielens')
+if num_total_files == 1:
+    from dataset import *
+    ds = DataSet(X_train, Y_train, X_val, Y_val, [], [], 0, [], [], name_dataset = 'movielens')
+else:
+    from dataset_dynamic import *
+    ds = DataSet(max_interactions, input_embedding_size, year, representation, num_total_files, num_validation_file, name_dataset='movielens')
 X_train = []
 Y_train = []
 X_val = []

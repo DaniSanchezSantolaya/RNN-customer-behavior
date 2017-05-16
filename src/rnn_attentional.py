@@ -6,6 +6,7 @@ import os
 #from PhasedLSTMCell import *
 import time
 import sys
+import pickle
 
 
 #Define RNN namespace according to tensorflow version
@@ -74,7 +75,15 @@ class RNN_dynamic:
             print('Defined weights from embedding to output')
 
         if self.parameters['embedding_size'] > 0:
-            self.weights['emb'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']], stddev=self.parameters['init_stdev']), name='w_emb')
+            if self.parameters['W_emb_init'].lower() == 'none':
+                self.weights['emb'] = tf.Variable(tf.random_normal([self.parameters['n_input'], self.parameters['embedding_size']], stddev=self.parameters['init_stdev']), name='w_emb')
+                print('Defined no pretrained w_emb')
+            else: # Load pretrained W_emb
+                with open("pickles/movielens/" + self.parameters['W_emb_init'] + ".pickle", 'rb') as handle:
+                    arr_W = pickle.load(handle)
+                self.weights['emb'] = tf.Variable(arr_W, name="w_emb")
+                print('Defined pretrained w_emb')
+
             if self.parameters['embedding_activation'] != 'linear':
                 self.biases['emb'] = tf.Variable(tf.random_normal([self.parameters['embedding_size']]), name='b_emb')
             print('Defined embedding weights')
@@ -161,7 +170,7 @@ class RNN_dynamic:
         if self.parameters['attention_weights_activation'] == 'tanh':
             self.ejs = tf.tanh(self.ejs)
             print('Defined tanh ejs')
-        if self.parameters['attention_weights_activation'] == 'sigmoid':
+        elif self.parameters['attention_weights_activation'] == 'sigmoid':
             self.ejs = tf.sigmoid(self.ejs)
             print('Defined sigmoid ejs')
         else:

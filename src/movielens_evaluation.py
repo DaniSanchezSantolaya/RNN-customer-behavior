@@ -10,13 +10,13 @@ from rnn_dynamic import *
 # from rnn_attentional import * #For the attentional experiment
 
 
-checkpoint_path = 'checkpoints/rep0-lstm2-256-1-128-adam-10000000000-20170510-145816/last_model/last_model.ckpt-2713600'
+checkpoint_path = 'checkpoints/rep0-lstm2-128-1-128-adam-10000000000-20170513-224618/last_model/last_model.ckpt-6432000'
 
 max_interactions = 100
 
-with open("pickles/movielens/X_test_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
+with open("pickles/movielens/X_test_" + str(max_interactions) + "_2009_filter20_rep2.pickle", 'rb') as handle:
     X_test = pickle.load(handle)
-with open("pickles/movielens/Y_test_" + str(max_interactions) + "_2009_filter20.pickle", 'rb') as handle:
+with open("pickles/movielens/Y_test_" + str(max_interactions) + "_2009_filter20_rep2.pickle", 'rb') as handle:
     Y_test = pickle.load(handle)
 
 
@@ -24,7 +24,7 @@ with open("pickles/movielens/Y_test_" + str(max_interactions) + "_2009_filter20.
 model_parameters = {}
 model_parameters['opt'] = 'adam'
 model_parameters['learning_rate'] = 0.01
-model_parameters['n_hidden'] = 256
+model_parameters['n_hidden'] = 128
 model_parameters['batch_size'] = 128
 model_parameters['rnn_type'] = 'lstm2'
 model_parameters['rnn_layers'] = 1
@@ -36,8 +36,8 @@ model_parameters['padding'] = 'right'
 model_parameters['n_input'] = X_test[0].toarray().shape[1]
 model_parameters['n_output'] = Y_test[0].toarray().shape[1]
 model_parameters['seq_length'] = X_test[0].toarray().shape[0]
-model_parameters['embedding_size'] = 0
-model_parameters['embedding_activation'] = 'linear'
+model_parameters['embedding_size'] = 128
+model_parameters['embedding_activation'] = 'tanh'
 model_parameters['y_length'] = 1
 # Parameters for the attentional model only
 model_parameters['attentional_layer'] = 'embedding'
@@ -60,6 +60,8 @@ def evaluate_sample(predictions, y_true, k):
     num_pos_k = len(correct_idx)
     total_pos = len(y_true)
     recall_user_k = (num_pos_k/float(total_pos))
+    # Precision
+    precision_user_k = (num_pos_k)/float(k)
     # Sps
     first_movie = y_true_idx[0]
     if first_movie in sorted_idx[0:k]:
@@ -75,13 +77,14 @@ def evaluate_sample(predictions, y_true, k):
             sum_precisions += actual_pos/float(i+1)
     ap_k = sum_precisions/min(k, len(y_true))
     
-    return recall_user_k, sps_k, ap_k, num_pos_k, total_pos
+    return recall_user_k, precision_user_k, sps_k, ap_k, num_pos_k, total_pos
 
     
 # Make predictions in chunks
 
 k = 10
 recalls = []
+precisions = []
 spss = []
 aps = []
 num_poss = []
@@ -94,8 +97,9 @@ for i in range(0, len(X_test), batch_size):
     y_test = [y.toarray() for y in Y_test[i:i+batch_size]]
     logits, y_pred = model.predict(x_test, checkpoint_path)
     for j in range(len(y_pred)):
-        recall_user_k, sps_k, ap_k, num_pos_k, total_pos = evaluate_sample(y_pred[j], y_test[j], k)
+        recall_user_k, precision_user_k, sps_k, ap_k, num_pos_k, total_pos = evaluate_sample(y_pred[j], y_test[j], k)
         recalls.append(recall_user_k)
+        precisions.append(precision_user_k)
         spss.append(sps_k)
         aps.append(ap_k)
         num_poss.append(num_pos_k)
@@ -103,6 +107,7 @@ for i in range(0, len(X_test), batch_size):
     print(str(i) + '/' + str(len(X_test)))
 
 print('Mean recall users: ' + str(np.mean(recalls)))
+print('Mean precisions users: ' + str(np.mean(precisions)))
 print('Mean spss: ' + str(np.mean(spss)))
 print('MAP: ' + str(np.mean(aps)))
 total_recall = np.sum(num_poss)/float(np.sum(total_poss))
