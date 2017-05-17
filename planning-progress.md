@@ -4,6 +4,8 @@ State big hyphotesis for every research question (why to do that) and for every 
 
 Complete results table
 
+https://docs.google.com/presentation/d/1glKNPGVXef2UZiUiPRxZP-bxb33s3wXyB0oLdv1iTi4/edit#slide=id.p
+
 # 26 April - 09 May
 
 State:
