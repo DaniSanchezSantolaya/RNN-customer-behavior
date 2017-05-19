@@ -8,7 +8,7 @@ import sys
 import gensim, logging
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
-b_generate_training_samples = False
+b_generate_training_samples = True
 b_output_embeddings = False
 load_pretrained_embeddings = False
 embedding_size = 64
@@ -18,7 +18,8 @@ date_test = '2014-10-01'
 movies_min_ratings = 20
 min_seq_length = 5
 max_seq_length = 100
-word2vec_iter = 10
+word2vec_iter = 25
+window_size = 10
 num_users_save_train = 500 # Save file every this number of users to avoid consume all the RAM
 year = '2009'
 
@@ -69,7 +70,7 @@ else:
     for name, group in grouped:
         movie_sequences.append(group.sort_values(['rating', 'date']).movieId.values.astype(str).tolist())
 
-    word2vec = gensim.models.Word2Vec(movie_sequences, size=embedding_size, window=50000000, min_count=1, iter=word2vec_iter)
+    word2vec = gensim.models.Word2Vec(movie_sequences, size=embedding_size, window=window_size, min_count=1, iter=word2vec_iter)
     word2vec.save("word2vec_" + str(embedding_size) + ".bin")
 
 # STEP 2: CREATE TRAINING SAMPLES USING THE EMBEDDINGS

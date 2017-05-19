@@ -71,6 +71,7 @@ class RNN_dynamic:
             else: # Load pretrained W_emb
                 with open("pickles/movielens/" + self.parameters['W_emb_init'] + ".pickle", 'rb') as handle:
                     arr_W = pickle.load(handle)
+                    arr_W = arr_W.astype(np.float32)
                 self.weights['emb'] = tf.Variable(arr_W, name="w_emb")
                 print('Defined pretrained w_emb')
             if self.parameters['embedding_activation'] != 'linear':
@@ -382,7 +383,7 @@ class RNN_dynamic:
                           "{:.6f}".format(train_minibatch_loss))
                     train_writer.add_summary(summary, total_iterations)
                     train_loss_list.append(train_minibatch_loss)
-                    print("Iter "+ str(total_iterations) + ", mean last 25 train loss: " + str(np.mean(train_loss_list[-25:])))
+                    print("Iter "+ str(total_iterations) + ", mean last 50 train loss: " + str(np.mean(train_loss_list[-50:])))
                     # Calculate training loss at last month
                     if ds._name_dataset.lower() == 'santander':
                         if len(ds._X_train_last_month) > 0:
@@ -439,7 +440,7 @@ class RNN_dynamic:
                                 print("Iter " + str(total_iterations) + ", Validation  Loss= " +
                                       "{:.6f}".format(self.val_loss))
                                 val_loss_list.append(self.val_loss)
-                                print("Iter "+ str(total_iterations) + ", mean last 25 validation loss: " + str(np.mean(val_loss_list[-25:])))
+                                print("Iter "+ str(total_iterations) + ", mean last 50 validation loss: " + str(np.mean(val_loss_list[-50:])))
 
                     # Calculate test loss
                     if ds._name_dataset.lower() == 'santander':
@@ -455,8 +456,8 @@ class RNN_dynamic:
 
                     #If best loss save the model as best model so far
                     if b_val_in_batches and ds._name_dataset.lower() == 'movielens':
-                        if np.mean(val_loss_list[-25:]) < self.best_loss:
-                            self.best_loss = np.mean(val_loss_list[-25:])
+                        if np.mean(val_loss_list[-50:]) < self.best_loss:
+                            self.best_loss = np.mean(val_loss_list[-50:])
                             checkpoint_dir_tmp = checkpoint_dir + '/best_model/'
                             checkpoint_path = os.path.join(checkpoint_dir_tmp, 'model_best.ckpt')
                             saver_best.save(sess, checkpoint_path, global_step=total_iterations)
