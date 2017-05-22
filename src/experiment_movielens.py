@@ -21,9 +21,9 @@ np.random.seed(17)
 #ubuntu@packer-ubuntu-16:~$ python3.5 experiment_movielens.py 100 right 0.025 adam 0.01 50 128 lstm2 1 0.2 0 softmax 10000000 0.1 0 linear one-hot > movielens.txt
 
 # Change if using dataset dynamic
-num_total_files = 1#71
+num_total_files = 71
 num_validation_file = 8
-year = '2009' #2009
+year = '2014' #2009
 
 start = time.time()
 
@@ -182,7 +182,10 @@ if type_input == 'one-hot':
     model_parameters['seq_length'] = X_train[0].toarray().shape[0]
 else:
     model_parameters['n_input'] = X_train[0].shape[1]
-    model_parameters['n_output'] = Y_train[0].shape[1]
+    if model_parameters['type_output'] == 'embeddings':
+        model_parameters['n_output'] = Y_train[0].shape[0]
+    else:
+        model_parameters['n_output'] = Y_train[0].shape[1]
     model_parameters['seq_length'] = X_train[0].shape[0]
 print('num features: ' + str(model_parameters['n_input']))
 print('seq length: ' + str(model_parameters['seq_length']))

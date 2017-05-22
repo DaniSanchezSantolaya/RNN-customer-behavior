@@ -11,7 +11,7 @@ import pickle
 #Define RNN namespace according to tensorflow version
 if tf.__version__ == '0.12.0':
     rnn_namespace = tf.nn.rnn_cell
-elif tf.__version__ == '1.0.1':
+elif (tf.__version__ == '1.0.1') or (tf.__version__ == '1.1.0'):
     rnn_namespace = tf.contrib.rnn
 
 b_val_in_batches = True
@@ -178,8 +178,17 @@ class RNN_dynamic:
         elif self.parameters['type_output'].lower() == 'embeddings':
             self.pred_prob = self.final_logits
             if self.parameters['y_length'] == 1:
-                self.loss = tf.reduce_mean(tf.losses.cosine_distance(labels=self.y, predictions=self.final_logits))
-            elif self.parameters['y_length'] > 0:
+                # self.loss = tf.reduce_mean(tf.losses.cosine_distance(labels=self.y, predictions=self.final_logits))
+                # self.loss_no_reduced = tf.contrib.losses.cosine_distance(labels=self.y, predictions=self.final_logits, dim=0)
+                # self.loss = tf.reduce_mean(self.loss_no_reduced)
+                num = tf.reduce_sum(tf.mul(self.y, self.final_logits), axis=1)
+                y_norm = tf.sqrt(tf.reduce_sum(tf.mul(self.y, self.y), axis=1))
+                logits_norm = tf.sqrt(tf.reduce_sum(tf.mul(self.final_logits, self.final_logits), axis=1))
+                den = tf.mul(y_norm, logits_norm)
+                cos_sim = tf.div(num, den)
+                self.cos_dist = 1 - cos_sim
+                self.loss = tf.reduce_mean(self.cos_dist)
+            elif self.parameters['y_length'] > 0: # CHECK: Why 0?
                 self.loss = tf.losses.cosine_distance(labels=self.y, predictions=self.final_logits)
                 # possible alternative: https://www.tensorflow.org/api_docs/python/tf/contrib/losses/cosine_distance
 
@@ -367,6 +376,20 @@ class RNN_dynamic:
                 #self.weights['emb']
                 #w_emb = sess.run(self.weights['emb'], feed_dict={self.x: batch_x, self.y: batch_y, self.dropout_keep_prob: 1})
                 #print('w_emb: ' + str(w_emb))
+                # Cosine Distance
+                # import scipy
+                # from scipy import spatial
+                # final_logits, loss_no_reduced, loss_reduced = sess.run([self.final_logits, self.cos_dist, self.loss], feed_dict={self.x: batch_x, self.y: batch_y, self.dropout_keep_prob: 1})
+                # print('batch_y: ' + str(batch_y))
+                # print('final_logits: ' + str(final_logits))
+                # print('loss_no_reduced: ' + str(loss_no_reduced))
+                # print('loss_reduced: ' + str(loss_reduced))
+                # cosine_distances = []
+                # for i in range(len(batch_y)):
+                    # cs_dis = scipy.spatial.distance.cosine(batch_y[i, :], final_logits[i, :])
+                    # cosine_distances.append(cs_dis)
+                # print('Mean: ' + str(np.mean(cosine_distances)))
+                # break
                 # END DEBUG
 
 

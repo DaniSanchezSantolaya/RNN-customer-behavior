@@ -22,7 +22,7 @@ np.random.seed(17)
 # Change if using dataset dynamic
 num_total_files = 1#71
 num_validation_file = 8
-year = '2014' #2009
+year = '2009' #2009
 
 start = time.time()
 

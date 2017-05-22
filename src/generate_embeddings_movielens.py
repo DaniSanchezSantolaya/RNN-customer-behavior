@@ -9,11 +9,11 @@ import gensim, logging
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 b_generate_training_samples = True
-b_output_embeddings = False
-load_pretrained_embeddings = False
+b_output_embeddings = True
+load_pretrained_embeddings = True
 embedding_size = 64
 start_date_embeddings = '2009-01-01'
-start_date_train = '2009-01-01'
+start_date_train = '2014-01-01'
 date_test = '2014-10-01'
 movies_min_ratings = 20
 min_seq_length = 5
@@ -21,7 +21,7 @@ max_seq_length = 100
 word2vec_iter = 25
 window_size = 10
 num_users_save_train = 500 # Save file every this number of users to avoid consume all the RAM
-year = '2009'
+year = '2014'
 
 # representation: 1: 1 sample per user, 2: data augmentation, 3: intermediate errors
 representation = 2
@@ -103,6 +103,7 @@ df_date = df_date[df_date.userId.isin(filter_users)]
 print('Total number of ratings:' + str(len(df_date)))
 print('Number of different users: ' + str(len(df_date['userId'].unique())))
 print('Number of different movies: ' + str(len(df_date['movieId'].unique())))
+sys.stdout.flush()
 
 # Build array mapping movie_id --> position in one-hot encoding
 print('Build array mapping movie_id --> position in one-hot encoding')
@@ -127,12 +128,13 @@ discarded_users = []
 actual_num_file = 0
 i = 0
 
-#Save embedding matrix
-W_emb = np.zeros((num_diff_items, embedding_size))
-for movieId in df_date['movieId'].unique():
-    W_emb[movieIds[movieId], :] = word2vec[str(movieId)]
-with open("pickles/movielens/W_emb_64.pickle", 'wb') as handle:
-    pickle.dump(W_emb, handle, protocol=pickle.HIGHEST_PROTOCOL)
+# Save embedding matrix
+if not load_pretrained_embeddings:
+    W_emb = np.zeros((num_diff_items, embedding_size))
+    for movieId in df_date['movieId'].unique():
+        W_emb[movieIds[movieId], :] = word2vec[str(movieId)]
+    with open("pickles/movielens/W_emb_64.pickle", 'wb') as handle:
+        pickle.dump(W_emb, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 if b_generate_training_samples:
     print('Generate training samples')

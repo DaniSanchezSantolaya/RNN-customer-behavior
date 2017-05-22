@@ -10,7 +10,7 @@ from rnn_dynamic import *
 # from rnn_attentional import * #For the attentional experiment
 
 
-checkpoint_path = 'checkpoints/rep0-lstm2-256-1-128-adam-10000000000-20170518-190929/last_model/last_model.ckpt-4262400'
+checkpoint_path = 'checkpoints/rep2-lstm2-256-1-128-adam-10000000000-20170519-192201/best_model/model_best.ckpt-2361600'
 
 max_interactions = 100
 
@@ -18,7 +18,7 @@ max_interactions = 100
 # tensorflow model
 model_parameters = {}
 model_parameters['opt'] = 'adam'
-model_parameters['learning_rate'] = 0.01
+model_parameters['learning_rate'] = 0.001
 model_parameters['n_hidden'] = 256
 model_parameters['batch_size'] = 128
 model_parameters['rnn_type'] = 'lstm2'
@@ -28,11 +28,11 @@ model_parameters['l2_reg'] = 0.0
 model_parameters['type_output'] = 'softmax'
 model_parameters['max_steps'] = 3000000
 model_parameters['padding'] = 'right'
-model_parameters['embedding_size'] = 64
-model_parameters['embedding_activation'] = 'linear'
+model_parameters['embedding_size'] = 0
+model_parameters['embedding_activation'] = 'tanh'
 model_parameters['y_length'] = 1
 model_parameters['W_emb_init'] = 'none'
-type_input = 'one-hot'
+type_input = 'embeddings'
 input_embeddings_size = 64
 # Parameters for the attentional model only
 model_parameters['attentional_layer'] = 'embedding'

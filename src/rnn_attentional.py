@@ -12,7 +12,7 @@ import pickle
 #Define RNN namespace according to tensorflow version
 if tf.__version__ == '0.12.0':
     rnn_namespace = tf.nn.rnn_cell
-elif tf.__version__ == '1.0.1':
+elif (tf.__version__ == '1.0.1') or (tf.__version__ == '1.1.0'):
     rnn_namespace = tf.contrib.rnn
 
 b_val_in_batches = True
@@ -364,6 +364,11 @@ class RNN_dynamic:
             sess.run(self.init)
 
             step = 1
+
+            for v in tf.trainable_variables():
+                print(v.name)
+            print('---------')
+            sys.stdout.flush()
             
             # Keep training until reach max iterations
             while step * self.parameters['batch_size'] < self.parameters['max_steps']:
