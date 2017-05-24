@@ -1,8 +1,22 @@
-# 09 May - 24 May
+# 09 May - 31 May
 
 State big hyphotesis for every research question (why to do that) and for every subquestion.
 
 Complete results table
+
+Review Output Embeddings
+
+Evaluate performance on different splits of the movies (Eg Top 10% with less ocurrences, second top 10%, and rest 80%)
+
+Start writing
+
+Statistical signicance test
+
+Attention analysis
+
+Embedding analysis - Eg. Look how they change when train jointly
+
+
 
 https://docs.google.com/presentation/d/1glKNPGVXef2UZiUiPRxZP-bxb33s3wXyB0oLdv1iTi4/edit#slide=id.p
 
