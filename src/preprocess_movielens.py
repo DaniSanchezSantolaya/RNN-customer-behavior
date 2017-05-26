@@ -7,13 +7,13 @@ import sys
 
 load_pickle = False
 
-start_date_train = '2005-01-01' #'2009-01-01'
-date_test = '2014-04-01'#'2014-10-01'
+start_date_train = '2009-01-01' #'2009-01-01'
+date_test = '2014-10-01'#'2014-10-01'
 min_seq_length = 5
 max_seq_length = 100
 
 
-movies_min_ratings = 25 #20
+movies_min_ratings = 20 #20
 
 # representation: 1: 1 sample per user(not implemented yet), 2: data augmentation, 3: intermediate errors
 representation = 2
@@ -35,7 +35,7 @@ else:
     df['date'] = pd.to_datetime(df['timestamp'],unit='s')
 
     df_date = df[df.date > start_date_train]
-    df_training = df[df.date < date_test]
+    df_training = df_date[df_date.date < date_test]
     with open("../data/Movielens/ml-20m/df_date.pickle", 'wb') as handle:
         pickle.dump(df_date, handle, protocol=pickle.HIGHEST_PROTOCOL)
   

@@ -179,7 +179,10 @@ if type_input == 'one-hot':
     model_parameters['seq_length'] = X_train[0].toarray().shape[0]
 else:
     model_parameters['n_input'] = X_train[0].shape[1]
-    model_parameters['n_output'] = Y_train[0].shape[1]
+    if model_parameters['type_output'] == 'embeddings':
+        model_parameters['n_output'] = Y_train[0].shape[0]
+    else:
+        model_parameters['n_output'] = Y_train[0].shape[1]
     model_parameters['seq_length'] = X_train[0].shape[0]
 print('num features: ' + str(model_parameters['n_input']))
 print('seq length: ' + str(model_parameters['seq_length']))

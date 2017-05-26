@@ -13,7 +13,7 @@ b_output_embeddings = True
 load_pretrained_embeddings = True
 embedding_size = 64
 start_date_embeddings = '2009-01-01'
-start_date_train = '2014-01-01'
+start_date_train = '2009-01-01'
 date_test = '2014-10-01'
 movies_min_ratings = 20
 min_seq_length = 5
@@ -21,10 +21,16 @@ max_seq_length = 100
 word2vec_iter = 25
 window_size = 10
 num_users_save_train = 500 # Save file every this number of users to avoid consume all the RAM
-year = '2014'
+year = '2009'
 
 # representation: 1: 1 sample per user, 2: data augmentation, 3: intermediate errors
 representation = 2
+
+
+last_part_filename = ""
+if b_output_embeddings:
+    last_part_filename = '_output'
+
 
 # STEP 1: LOAD PRETRAINED EMBEDDINGS OR TRAIN THEM FROM SCRATCH
 
@@ -217,11 +223,11 @@ if b_generate_training_samples:
         i += 1
         if i % num_users_save_train == 0:
             with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_embeddings_" + str(
-                    embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + ".pickle", 'wb') as handle:
+                    embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + last_part_filename + ".pickle", 'wb') as handle:
                 pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
             Y_train = []
             with open("pickles/movielens/X_train_" + str(max_seq_length) + "_embeddings_" + str(
-                    embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + ".pickle", 'wb') as handle:
+                    embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + last_part_filename + ".pickle", 'wb') as handle:
                 pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
             X_train = []
             gc.collect()
@@ -255,12 +261,14 @@ if b_generate_training_samples:
     X_test = []
     Y_test = []
     gc.collect()
-    with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + ".pickle", 'wb') as handle:
-        pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    if len(Y_train) > 0:
+        with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + last_part_filename + ".pickle", 'wb') as handle:
+            pickle.dump(Y_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
     Y_train = []
     gc.collect()
-    with open("pickles/movielens/X_train_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + ".pickle", 'wb') as handle:
-        pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    if len(X_train) > 0:
+        with open("pickles/movielens/X_train_" + str(max_seq_length) + "_embeddings_" + str(embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(actual_num_file) + last_part_filename + ".pickle", 'wb') as handle:
+            pickle.dump(X_train, handle, protocol=pickle.HIGHEST_PROTOCOL)
     print('Saved pickles!')
 
 

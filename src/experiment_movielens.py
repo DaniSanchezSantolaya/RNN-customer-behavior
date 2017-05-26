@@ -11,6 +11,7 @@ import sys
 import ast
 import time
 
+print(time.strftime("%Y%m%d-%H%M%S"))
 
 random.seed(17)
 random.seed(17)
@@ -21,9 +22,9 @@ np.random.seed(17)
 #ubuntu@packer-ubuntu-16:~$ python3.5 experiment_movielens.py 100 right 0.025 adam 0.01 50 128 lstm2 1 0.2 0 softmax 10000000 0.1 0 linear one-hot > movielens.txt
 
 # Change if using dataset dynamic
-num_total_files = 71
-num_validation_file = 8
-year = '2014' #2009
+num_total_files = 3
+num_validation_file = 1
+year = '2009' #2009
 
 start = time.time()
 
@@ -129,6 +130,12 @@ print('type_input: ' + str(type_input))
 print('input_embedding_size: ' + str(input_embedding_size))
 print('W_emb_init: ' + str(model_parameters['W_emb_init']))
 
+last_part_filename = ""
+b_output_embeddings = False
+if model_parameters['type_output'] == 'embeddings':
+    last_part_filename = '_output'
+    b_output_embeddings = True
+
 if num_total_files == 1:
     #### Load train pickle
     if type_input == 'one-hot':
@@ -143,11 +150,11 @@ if num_total_files == 1:
             Y_train = pickle.load(handle)
 else: #Load first file, just for get the input, output sizes used later
     with open("pickles/movielens/X_train_" + str(max_interactions) + "_embeddings_" + str(
-            input_embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file0.pickle", 'rb') as handle:
+            input_embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file0" + last_part_filename + ".pickle", 'rb') as handle:
         X_train = pickle.load(handle)
 
     with open("pickles/movielens/Y_train_" + str(max_interactions) + "_embeddings_" + str(
-            input_embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file0.pickle", 'rb') as handle:
+            input_embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file0" + last_part_filename + ".pickle", 'rb') as handle:
         Y_train = pickle.load(handle)
 
 
@@ -185,6 +192,7 @@ else:
     if model_parameters['type_output'] == 'embeddings':
         model_parameters['n_output'] = Y_train[0].shape[0]
     else:
+        print(Y_train[0].shape)
         model_parameters['n_output'] = Y_train[0].shape[1]
     model_parameters['seq_length'] = X_train[0].shape[0]
 print('num features: ' + str(model_parameters['n_input']))
@@ -195,7 +203,7 @@ if num_total_files == 1:
     ds = DataSet(X_train, Y_train, X_val, Y_val, [], [], 0, [], [], name_dataset = 'movielens')
 else:
     from dataset_dynamic import *
-    ds = DataSet(max_interactions, input_embedding_size, year, representation, num_total_files, num_validation_file, name_dataset='movielens')
+    ds = DataSet(max_interactions, input_embedding_size, year, representation, num_total_files, num_validation_file, b_output_embeddings, name_dataset='movielens')
 X_train = []
 Y_train = []
 X_val = []

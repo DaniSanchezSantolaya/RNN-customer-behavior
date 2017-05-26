@@ -253,7 +253,7 @@ class RNN_dynamic:
         elif self.parameters['opt'].lower() == 'adagraddao':
             self.optimizer = tf.train.AdagradDAOptimizer(learning_rate=self.parameters['learning_rate']).minimize(self.loss)
         elif self.parameters['opt'].lower() == 'momentum':
-            self.optimizer = tf.train.MomentumOptimizer(learning_rate=self.parameters['learning_rate']).minimize(self.loss)
+            self.optimizer = tf.train.MomentumOptimizer(learning_rate=self.parameters['learning_rate'], momentum=0.9).minimize(self.loss)
         elif self.parameters['opt'].lower() == 'ftrl':
             self.optimizer = tf.train.FtrlOptimizer(learning_rate=self.parameters['learning_rate']).minimize(self.loss)
         elif self.parameters['opt'].lower() == 'proximalgd':
@@ -538,7 +538,12 @@ class RNN_dynamic:
         with tf.Session() as sess:
             print('load model: ' + str(checkpoint_path))
             saver.restore(sess, checkpoint_path)
-            
+
+            #print('Weights:')
+            #for v in tf.trainable_variables():
+                #print(v.name)
+                #print(v.get_shape())
+                #print('-------')
 
             #pred_test = []
             pred_test = np.zeros((len(X_test), self.parameters['n_output']))

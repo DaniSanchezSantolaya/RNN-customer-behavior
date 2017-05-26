@@ -9,7 +9,7 @@ class DataSet():
     """
 
 
-    def __init__(self, max_seq_length, embedding_size, year, representation, num_total_files, num_validation_file, name_dataset='movielens'):
+    def __init__(self, max_seq_length, embedding_size, year, representation, num_total_files, num_validation_file, b_output_embeddings, name_dataset='movielens'):
 
         assert num_validation_file != 0, ("Validation set file cannot be the first one")
         assert num_validation_file != num_total_files, ("Validation set file cannot be the last one")
@@ -27,23 +27,27 @@ class DataSet():
         self._index_in_file = 0
         self._index_in_epoch_val = 0
 
+        if b_output_embeddings:
+            self.last_part_filename = '_output'
+
         # Load first training file
         with open("pickles/movielens/X_train_" + str(max_seq_length) + "_embeddings_" + str(
-                embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(self._actual_file) + ".pickle", 'rb') as handle:
+                embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(self._actual_file) + self.last_part_filename + ".pickle", 'rb') as handle:
             self._X_train = pickle.load(handle)
 
         with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_embeddings_" + str(
-                embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(self._actual_file) + ".pickle", 'rb') as handle:
+                embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(self._actual_file) + self.last_part_filename +  ".pickle", 'rb') as handle:
             self._Y_train = pickle.load(handle)
 
         self._num_samples_file = len(self._X_train)
+        #print('Num samples file: ' + str(len(self._X_train)))
 
         # Load validation file
         with open("pickles/movielens/X_train_" + str(max_seq_length) + "_embeddings_" + str(
-                embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(num_validation_file) + ".pickle", 'rb') as handle:
+                embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(num_validation_file) + self.last_part_filename + ".pickle", 'rb') as handle:
             self._X_val = pickle.load(handle)
         with open("pickles/movielens/Y_train_" + str(max_seq_length) + "_embeddings_" + str(
-                embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(num_validation_file) + ".pickle", 'rb') as handle:
+                embedding_size) + "_" + year + "_filter20_rep" + str(representation) + "_file" + str(num_validation_file) + self.last_part_filename + ".pickle", 'rb') as handle:
             self._Y_val = pickle.load(handle)
 
         self._num_examples_val = len(self._X_val)
@@ -54,7 +58,7 @@ class DataSet():
         start = self._index_in_file
         self._index_in_file += batch_size
         if self._index_in_file >= self._num_samples_file:
-            print('Training file ' + str(self._actual_file) + ' completed')
+            #print('Training file ' + str(self._actual_file) + ' completed')
             # Change file
             self._actual_file += 1
 
@@ -64,23 +68,23 @@ class DataSet():
             # If we have gone through all files, start a new epoch from the first file
             if self._actual_file >= self.num_total_files:
                 self._epochs_completed += 1
-                print('Epoch completed! epochs completed: ' + str(self._epochs_completed))
+                #print('Epoch completed! epochs completed: ' + str(self._epochs_completed))
                 self._actual_file = 0
                 new_epoch = True
 
-            print('Start with training file: ' + str(self._actual_file))
+            #print('Start with training file: ' + str(self._actual_file))
 
             # Load next training file
             with open("pickles/movielens/X_train_" + str(self.max_seq_length) + "_embeddings_" + str(
                     self.embedding_size) + "_" + self.year + "_filter20_rep" + str(self._representation) + "_file" + str(
-                self._actual_file) + ".pickle", 'rb') as handle:
+                self._actual_file) + self.last_part_filename + ".pickle", 'rb') as handle:
                 self._X_train = pickle.load(handle)
             with open("pickles/movielens/Y_train_" + str(self.max_seq_length) + "_embeddings_" + str(
                     self.embedding_size) + "_" + self.year + "_filter20_rep" + str(self._representation) + "_file" + str(
-                self._actual_file) + ".pickle", 'rb') as handle:
+                self._actual_file) + self.last_part_filename + ".pickle", 'rb') as handle:
                 self._Y_train = pickle.load(handle)
             self._num_samples_file = len(self._X_train)
-
+            #print('Num samples file: ' + str(len(self._X_train)))
             start = 0
             self._index_in_file = batch_size
             # print(self._index_in_file)

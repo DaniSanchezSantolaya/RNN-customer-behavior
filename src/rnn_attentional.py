@@ -81,6 +81,7 @@ class RNN_dynamic:
             else: # Load pretrained W_emb
                 with open("pickles/movielens/" + self.parameters['W_emb_init'] + ".pickle", 'rb') as handle:
                     arr_W = pickle.load(handle)
+                    arr_W = arr_W.astype(np.float32)
                 self.weights['emb'] = tf.Variable(arr_W, name="w_emb")
                 print('Defined pretrained w_emb')
 
@@ -216,9 +217,18 @@ class RNN_dynamic:
         if self.parameters['type_output'].lower() == 'sigmoid':
             self.pred_prob = tf.sigmoid(self.logits)
             self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.logits, self.y))
-        else:
+        elif self.parameters['type_output'].lower() == 'softmax':
             self.pred_prob = tf.nn.softmax(self.logits)
             self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.y))
+        elif self.parameters['type_output'].lower() == 'embeddings':
+            self.pred_prob = self.logits
+            num = tf.reduce_sum(tf.mul(self.y, self.logits), axis=1)
+            y_norm = tf.sqrt(tf.reduce_sum(tf.mul(self.y, self.y), axis=1))
+            logits_norm = tf.sqrt(tf.reduce_sum(tf.mul(self.logits, self.logits), axis=1))
+            den = tf.mul(y_norm, logits_norm)
+            cos_sim = tf.div(num, den)
+            self.cos_dist = 1 - cos_sim
+            self.loss = tf.reduce_mean(self.cos_dist)
             
 
         #Add L2 regularizatoin loss
@@ -446,13 +456,14 @@ class RNN_dynamic:
                     train_loss_list.append(train_minibatch_loss)
                     print("Iter "+ str(total_iterations) + ", mean last 10 train loss: " + str(np.mean(train_loss_list[-10:])))
                     # Calculate training loss at last month
-                    if len(ds._X_train_last_month) > 0:
-                        train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month, self.dropout_keep_prob: 1})
-                        print("Iter " + str(total_iterations) + ", Last month train Loss= " + 
-                              "{:.6f}".format(train_last_month_loss) + ", Last month train Accuracy= " + 
-                              "{:.6f}".format(train_last_month_accuracy) + ", Last train Map= " + 
-                              "{:.6f}".format(train_last_month_map))
-                        train_last_month_writer.add_summary(summary, total_iterations)
+                    if ds._name_dataset.lower() == 'santander':
+                        if len(ds._X_train_last_month) > 0:
+                            train_last_month_loss, train_last_month_accuracy, train_last_month_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x: ds._X_train_last_month, self.y: ds._Y_train_last_month, self.dropout_keep_prob: 1})
+                            print("Iter " + str(total_iterations) + ", Last month train Loss= " +
+                                  "{:.6f}".format(train_last_month_loss) + ", Last month train Accuracy= " +
+                                  "{:.6f}".format(train_last_month_accuracy) + ", Last train Map= " +
+                                  "{:.6f}".format(train_last_month_map))
+                            train_last_month_writer.add_summary(summary, total_iterations)
                     # Calculate val loss
                     if ds._name_dataset.lower() == 'santander':
                         self.val_loss, val_acc, val_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_val, self.y:ds._Y_val, self.dropout_keep_prob: 1})
@@ -502,13 +513,14 @@ class RNN_dynamic:
                                 print("Iter "+ str(total_iterations) + ", mean last 25 validation loss: " + str(np.mean(val_loss_list[-25:])))
 
                     # Calculate test loss
-                    if len(ds._X_local_test) > 0:
-                        self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
-                        test_writer.add_summary(summary, total_iterations)
-                        print("Iter " + str(total_iterations) + ", Test Loss= " + 
-                              "{:.6f}".format(self.test_loss) + ", Test Accuracy= " + 
-                              "{:.6f}".format(test_acc) + ", Test Map= " + 
-                              "{:.6f}".format(test_map))
+                    if ds._name_dataset.lower() == 'santander':
+                        if len(ds._X_local_test) > 0:
+                            self.test_loss, test_acc, test_map, summary = sess.run([self.loss, self.accuracy, self.MAP, merged], feed_dict={self.x:ds._X_local_test, self.y:ds._Y_local_test, self.dropout_keep_prob: 1})
+                            test_writer.add_summary(summary, total_iterations)
+                            print("Iter " + str(total_iterations) + ", Test Loss= " +
+                                  "{:.6f}".format(self.test_loss) + ", Test Accuracy= " +
+                                  "{:.6f}".format(test_acc) + ", Test Map= " +
+                                  "{:.6f}".format(test_map))
 
                     # If best loss save the model as best model so far
                     if b_val_in_batches and ds._name_dataset.lower() == 'movielens':
