@@ -12,7 +12,8 @@ import scipy
 from scipy import spatial
 
 
-checkpoint_path = 'checkpoints/rep0-lstm2-256-1-128-adam-1000000000-hidden_state-64-20170523-125653/last_model/last_model.ckpt-13548800'
+checkpoint_path = 'checkpoints/attentional-linear-to-hidden-state/rep0-lstm2-256-1-128-adam-1000000000-hidden_state-64-20170523-125653/last_model/last_model.ckpt-9971200'
+research_question_code = 'RQ2_1a'
 
 max_interactions = 100
 
@@ -144,11 +145,13 @@ for i in range(0, len(X_test), batch_size):
     logits, y_pred = model.predict(x_test, checkpoint_path)
     for j in range(len(y_pred)):
         if model_parameters['type_output'] == 'embeddings':
-            predictions = get_distances_output_embeddings(y_pred[0, :])
+            predictions = get_distances_output_embeddings(y_pred[j, :])
+            b_distances = True
         else:
             predictions = y_pred[j]
+            b_distances = False
         recall_user_k, precision_user_k, precision_r, sps_k, ap_k, num_pos_k, total_pos = evaluate_sample(predictions,
-                                                                                                          y_test[j], k)
+                                                                                                          y_test[j], k, b_distances)
         recalls.append(recall_user_k)
         precisions.append(precision_user_k)
         precisions_r.append(precision_r)
@@ -165,3 +168,10 @@ print('Mean spss: ' + str(np.mean(spss)))
 print('MAP: ' + str(np.mean(aps)))
 total_recall = np.sum(num_poss)/float(np.sum(total_poss))
 print('Total Recall (no mean recall users): ' + str(total_recall))
+
+# Save pickles of precisions_r and spss
+with open("pickles/movielens/measures/precision_r_" + research_question_code + ".pickle", 'wb') as handle:
+    pickle.dump(precisions_r, handle, protocol=pickle.HIGHEST_PROTOCOL)
+with open("pickles/movielens/measures/spss_" + research_question_code + ".pickle", 'wb') as handle:
+    pickle.dump(spss, handle, protocol=pickle.HIGHEST_PROTOCOL)
+

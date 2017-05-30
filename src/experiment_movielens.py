@@ -22,8 +22,8 @@ np.random.seed(17)
 #ubuntu@packer-ubuntu-16:~$ python3.5 experiment_movielens.py 100 right 0.025 adam 0.01 50 128 lstm2 1 0.2 0 softmax 10000000 0.1 0 linear one-hot > movielens.txt
 
 # Change if using dataset dynamic
-num_total_files = 3
-num_validation_file = 1
+num_total_files = 1#71
+num_validation_file = 8
 year = '2009' #2009
 
 start = time.time()
@@ -200,7 +200,7 @@ print('seq length: ' + str(model_parameters['seq_length']))
 print('num output: ' + str(model_parameters['n_output']))
 if num_total_files == 1:
     from dataset import *
-    ds = DataSet(X_train, Y_train, X_val, Y_val, [], [], 0, [], [], name_dataset = 'movielens')
+    ds = DataSet(X_train, Y_train, X_val, Y_val, [], [], representation, [], [], name_dataset = 'movielens')
 else:
     from dataset_dynamic import *
     ds = DataSet(max_interactions, input_embedding_size, year, representation, num_total_files, num_validation_file, b_output_embeddings, name_dataset='movielens')

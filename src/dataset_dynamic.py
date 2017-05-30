@@ -57,7 +57,7 @@ class DataSet():
         new_epoch = False
         start = self._index_in_file
         self._index_in_file += batch_size
-        if self._index_in_file >= self._num_samples_file:
+        if (self._index_in_file >= self._num_samples_file):
             #print('Training file ' + str(self._actual_file) + ' completed')
             # Change file
             self._actual_file += 1

@@ -682,3 +682,28 @@ class RNN_dynamic:
             
         
         return last_hidden_state
+
+    def predict_and_get_weights(self, X_test, checkpoint_path=None):
+        # Make predictions for test set with the best model
+        if checkpoint_path is None:
+            checkpoint_dir = './checkpoints/' + self.parameters_str
+            # CHECK: is removing the best model sometimes
+            if self.best_loss < self.val_loss:
+                checkpoint_dir_tmp = checkpoint_dir + '/best_model/'
+                checkpoint_path = os.path.join(checkpoint_dir_tmp, self.best_model_path)
+            else:
+                checkpoint_dir_tmp = checkpoint_dir + '/last_model/'
+                checkpoint_path = os.path.join(checkpoint_dir_tmp, self.last_model_path)
+
+        saver = tf.train.Saver()
+
+        # checkpoint_path = os.path.join(checkpoint_dir, self.last_model_path)
+        with tf.Session() as sess:
+            print('load model: ' + str(checkpoint_path))
+            saver.restore(sess, checkpoint_path)
+
+            logits, pred_test, alphas, reshaped_alpha = sess.run([self.logits, self.pred_prob, self.alphas, self.reshaped_alphas],
+                                               feed_dict={self.x: X_test,
+                                                          self.dropout_keep_prob: 1})
+
+        return logits, pred_test, alphas
