@@ -2,7 +2,9 @@
 
 Write the thesis draft
 
-Attention could be reduced to the model without attention (Looking only at the last hidden state). Analyze this
+Attention could be reduced to the model without attention (Looking only at the last hidden state). Analyze this.
+
+Look at Corrections for multiple statistical tests
 
 # 09 May - 31 May
 
