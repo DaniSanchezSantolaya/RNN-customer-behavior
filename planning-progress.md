@@ -1,3 +1,9 @@
+# 31 May - 14 June
+
+Write the thesis draft
+
+Attention could be reduced to the model without attention (Looking only at the last hidden state). Analyze this
+
 # 09 May - 31 May
 
 State big hyphotesis for every research question (why to do that) and for every subquestion.
@@ -19,6 +25,8 @@ Embedding analysis - Eg. Look how they change when train jointly
 
 
 https://docs.google.com/presentation/d/1glKNPGVXef2UZiUiPRxZP-bxb33s3wXyB0oLdv1iTi4/edit#slide=id.p
+
+https://docs.google.com/presentation/d/16t_GyEiXkxXdIQRKOSa2h8T6LocflrNGjOHiz59zGdU/edit#slide=id.g1f5dfcdb54_0_103
 
 # 26 April - 09 May
 
