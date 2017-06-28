@@ -8,6 +8,8 @@ import pandas as pd
 
 # load test data
 max_interactions = 100
+research_question_code = 'Frequency_Baseline_Final_Remove'
+remove_already_rated = True
 
 with open("pickles/movielens/X_test_" + str(max_interactions) + "_2009_filter20_rep3.pickle", 'rb') as handle:
     X_test = pickle.load(handle)
@@ -77,9 +79,12 @@ for movie_id, movie_count in zip(counts_movies_id, counts_movies_c):
 
 
 
-def evaluate_sample(predictions, y_true, k):
+def evaluate_sample(predictions, y_true, k, l_already_watched):
     idx_predictions = np.arange(len(predictions))
     sorted_pred, sorted_idx = zip(*sorted(zip(predictions, idx_predictions), reverse=True))
+    # Remove movies already rated
+    if remove_already_rated:
+        sorted_idx = [x for x in sorted_idx if x not in l_already_watched]
     # Recall
     _, y_true_idx = np.where(y_true == 1)
     correct_idx = set(sorted_idx[:k]).intersection(set(y_true_idx))
@@ -126,7 +131,8 @@ for i in range(0, len(X_test), batch_size):
     x_test = [x.toarray() for x in X_test[i:i + batch_size]]
     y_test = [y.toarray() for y in Y_test[i:i + batch_size]]
     for j in range(len(y_test)):
-        recall_user_k, precision_user_k, precision_r, sps_k, ap_k, num_pos_k, total_pos = evaluate_sample(prediction_array, y_test[j], k)
+        _, l_already_watched = np.where(x_test[j] == 1)
+        recall_user_k, precision_user_k, precision_r, sps_k, ap_k, num_pos_k, total_pos = evaluate_sample(prediction_array, y_test[j], k, l_already_watched)
         recalls.append(recall_user_k)
         precisions.append(precision_user_k)
         precisions_r.append(precision_r)
@@ -143,3 +149,9 @@ print('Mean spss: ' + str(np.mean(spss)))
 print('MAP: ' + str(np.mean(aps)))
 total_recall = np.sum(num_poss) / float(np.sum(total_poss))
 print('Total Recall (no mean recall users): ' + str(total_recall))
+
+# Save pickles of precisions_r and spss
+with open("pickles/movielens/measures/precision_r_" + research_question_code + ".pickle", 'wb') as handle:
+    pickle.dump(precisions_r, handle, protocol=pickle.HIGHEST_PROTOCOL)
+with open("pickles/movielens/measures/spss_" + research_question_code + ".pickle", 'wb') as handle:
+    pickle.dump(spss, handle, protocol=pickle.HIGHEST_PROTOCOL)

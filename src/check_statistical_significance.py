@@ -29,33 +29,41 @@ def sign_test(a, b):
 #H0: both measure are not different
 #H1: Measure 2 better than 1
 
-path_measure_1 = 'pickles/movielens/measures/spss_RQ1_3a.pickle'
-path_measure_2 = 'pickles/movielens/measures/spss_RQ1_4.pickle'
+measure = 'spss'
+methods = ['RQ1_1', 'RQ1_2', 'RQ1_3a', 'RQ1_3b', 'RQ1_4', 'RQ1_5', 'RQ2_1a', 'RQ2_1b', 'RQ2_2a', 'RQ2_2b']
 
-# path_measure_1 = 'pickles/movielens/measures/precision_r_RQ1_4.pickle'
-# path_measure_2 = 'pickles/movielens/measures/precision_r_RQ1_3a.pickle'
+for i in range(len(methods)):
+    for j in range(i+1, len(methods)):
+        method_1 = methods[i]
+        method_2 = methods[j]
+        path_measure_1 = 'pickles/movielens/measures/final_measures/' + measure + '_' + method_1 + '_Final.pickle'
+        path_measure_2 = 'pickles/movielens/measures/final_measures/' + measure + '_' + method_2 + '_Final.pickle'
 
-with open(path_measure_1, 'rb') as handle:
-    measure_1 = pickle.load(handle)
-with open(path_measure_2, 'rb') as handle:
-    measure_2 = pickle.load(handle)
+        # path_measure_1 = 'pickles/movielens/measures/precision_r_RQ1_4.pickle'
+        # path_measure_2 = 'pickles/movielens/measures/precision_r_RQ1_3a.pickle'
 
-if isinstance(measure_1, list):
-    measure_1 = np.array(measure_1)
-if isinstance(measure_2, list):
-    measure_2 = np.array(measure_2)
+        with open(path_measure_1, 'rb') as handle:
+            measure_1 = pickle.load(handle)
+        with open(path_measure_2, 'rb') as handle:
+            measure_2 = pickle.load(handle)
 
-# Test
-# measure_1 = np.array([0.25, 0.43, 0.39, 0.75, 0.43, 0.15, 0.20, 0.52, 0.49, 0.50])
-# measure_2 = np.array([0.35, 0.84, 0.15, 0.75, 0.68, 0.85, 0.80, 0.50, 0.58, 0.75])
+        if isinstance(measure_1, list):
+            measure_1 = np.array(measure_1)
+        if isinstance(measure_2, list):
+            measure_2 = np.array(measure_2)
 
-print('Some samples')
-print('measure 1: ' + str(measure_1[0:10]))
-print('measure 2: ' + str(measure_2[0:10]))
+        # Test
+        # measure_1 = np.array([0.25, 0.43, 0.39, 0.75, 0.43, 0.15, 0.20, 0.52, 0.49, 0.50])
+        # measure_2 = np.array([0.35, 0.84, 0.15, 0.75, 0.68, 0.85, 0.80, 0.50, 0.58, 0.75])
 
-p_value = sign_test(measure_1, measure_2)
+        #print('Some samples')
+        #print('measure 1: ' + str(measure_1[0:10]))
+        #print('measure 2: ' + str(measure_2[0:10]))
 
-print('p-value measure B is better than A: ' + str(p_value))
+        p_value = sign_test(measure_1, measure_2)
 
-print('Wilcoxon test: ')
-print(scipy.stats.wilcoxon(measure_1, measure_2))
+        print('p-value measure ' + method_2 + ' is better than ' + method_2 + ': ' + str(p_value))
+
+        wilcoxon = scipy.stats.wilcoxon(measure_1, measure_2)
+        print('Wilcoxon test with ' + method_1 + ' vs ' + method_2 + ': ' + str(wilcoxon))
+        print('----------------')

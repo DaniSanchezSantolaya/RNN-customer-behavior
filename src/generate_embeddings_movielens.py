@@ -35,7 +35,8 @@ if b_output_embeddings:
 # STEP 1: LOAD PRETRAINED EMBEDDINGS OR TRAIN THEM FROM SCRATCH
 
 if load_pretrained_embeddings:
-    word2vec = gensim.models.Word2Vec.load("word2vec_" + str(embedding_size) + ".bin")
+    #word2vec = gensim.models.Word2Vec.load("word2vec_" + str(embedding_size) + ".bin")
+    word2vec = gensim.models.Word2Vec.load("word2vec_64_window_10_iters_25_start_2009-01-01.bin")
     #word2vec =  gensim.models.KeyedVectors.load_word2vec_format("word2vec_" + str(embedding_size) + ".bin", binary=True)
     print('Loaded word2vec')
 else:

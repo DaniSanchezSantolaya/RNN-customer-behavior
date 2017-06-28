@@ -6,14 +6,16 @@ import os
 import time
 import sys
 import pickle
-#from rnn_dynamic import *
-from rnn_attentional import * #For the attentional experiment
+from rnn_dynamic import *
+#from rnn_attentional import * #For the attentional experiment
 import scipy
 from scipy import spatial
 
 
-checkpoint_path = 'checkpoints/attentional-linear-to-hidden-state/rep0-lstm2-256-1-128-adam-1000000000-hidden_state-64-20170523-125653/last_model/last_model.ckpt-9971200'
-research_question_code = 'RQ2_1a'
+
+checkpoint_path = 'checkpoints/rep2-lstm2-256-1-128-adam-10000000000-20170623-223914/best_model/model_best.ckpt-13158400'
+research_question_code = 'test'
+remove_already_rated = True
 
 max_interactions = 100
 
@@ -21,7 +23,7 @@ max_interactions = 100
 # tensorflow model
 model_parameters = {}
 model_parameters['opt'] = 'adam'
-model_parameters['learning_rate'] = 0.01
+model_parameters['learning_rate'] = 0.001
 model_parameters['n_hidden'] = 256
 model_parameters['batch_size'] = 128
 model_parameters['rnn_type'] = 'lstm2'
@@ -32,14 +34,14 @@ model_parameters['type_output'] = 'softmax'
 model_parameters['max_steps'] = 3000000
 model_parameters['padding'] = 'right'
 model_parameters['embedding_size'] = 64
-model_parameters['embedding_activation'] = 'linear'
+model_parameters['embedding_activation'] = 'tanh'
 model_parameters['y_length'] = 1
-model_parameters['W_emb_init'] = 'W_emb_64'
+model_parameters['W_emb_init'] = 'None'
 type_input = 'one-hot'
 input_embeddings_size = 0
 # Parameters for the attentional model only
 model_parameters['attentional_layer'] = 'hidden_state'
-model_parameters['attention_weights_activation'] = 'linear'
+model_parameters['attention_weights_activation'] = 'tanh'
 model_parameters['init_stdev'] = 0.1
 
 if type_input == 'one-hot':
@@ -52,6 +54,8 @@ elif type_input == 'embeddings':
         X_test = pickle.load(handle)
     with open("pickles/movielens/Y_test_" + str(max_interactions) + "_embeddings_" + str(input_embeddings_size) + "_2009_filter20_rep2.pickle", 'rb') as handle:
         Y_test = pickle.load(handle)
+    with open("pickles/movielens/X_test_" + str(max_interactions) + "_2009_filter20_rep2.pickle", 'rb') as handle:
+        X_test2 = pickle.load(handle)
 
 #model_parameters['n_input'] = X_test[0].toarray().shape[1]
 #model_parameters['n_output'] = Y_test[0].toarray().shape[1]
@@ -86,13 +90,16 @@ def get_distances_output_embeddings(embedding_pred):
         distances.append(scipy.spatial.distance.cosine(embedding_pred, W_emb[l, :]))
     return distances
 
-def evaluate_sample(predictions, y_true, k, b_distances=False):
+def evaluate_sample(predictions, l_already_watched, y_true, k, b_distances=False):
     # If predictions are probabilites, sort in reverse order, if are distances, sort from lower to higher
     reverse_sort = True
     if b_distances:
         reverse_sort = False
     idx_predictions = np.arange(len(predictions))
     sorted_pred, sorted_idx = zip(*sorted(zip(predictions, idx_predictions), reverse=reverse_sort))
+    # Remove movies already rated
+    if remove_already_rated:
+        sorted_idx = [x for x in sorted_idx if x not in l_already_watched]
     # Recall
     _, y_true_idx = np.where(y_true ==1)
     correct_idx = set(sorted_idx[:k]).intersection(set(y_true_idx))
@@ -142,6 +149,7 @@ for i in range(0, len(X_test), batch_size):
     elif type_input == 'embeddings':
         x_test = [x for x in X_test[i:i + batch_size]]
         y_test = [y.toarray() for y in Y_test[i:i + batch_size]]
+        x_test2 = [x.toarray() for x in X_test2[i:i+batch_size]]
     logits, y_pred = model.predict(x_test, checkpoint_path)
     for j in range(len(y_pred)):
         if model_parameters['type_output'] == 'embeddings':
@@ -150,7 +158,11 @@ for i in range(0, len(X_test), batch_size):
         else:
             predictions = y_pred[j]
             b_distances = False
-        recall_user_k, precision_user_k, precision_r, sps_k, ap_k, num_pos_k, total_pos = evaluate_sample(predictions,
+        if type_input == 'one-hot':
+            _, l_already_watched = np.where(x_test[j] == 1)
+        elif type_input == 'embeddings':
+            _, l_already_watched = np.where(x_test2[j] == 1)
+        recall_user_k, precision_user_k, precision_r, sps_k, ap_k, num_pos_k, total_pos = evaluate_sample(predictions, l_already_watched,
                                                                                                           y_test[j], k, b_distances)
         recalls.append(recall_user_k)
         precisions.append(precision_user_k)
