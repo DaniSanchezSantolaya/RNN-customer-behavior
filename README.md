@@ -13,4 +13,3 @@ to gain interpretability in the RNN model. We compare different variants of
 attention mechanism, providing their performance and the usefulness to explain the
 predictions of the model.
 
-Thesis: https://esc.fnwi.uva.nl/thesis/centraal/files/f244841390.pdf
